@@ -1,0 +1,97 @@
+---
+title: "Download and configure AI models"
+description: "Download the required ONNX models for Deep-Live-Cam face swapping and enhancement. Place GFPGANv1.4 and inswapper_128_fp16 in the models/ folder."
+---
+
+Deep-Live-Cam relies on three AI models to function. Two of them — the face swapper and the face enhancer — must be downloaded manually and placed in the `models/` folder before you run the application. The third, used for face analysis, is downloaded automatically by the InsightFace library the first time you launch Deep-Live-Cam.
+
+## Required models
+
+### inswapper_128_fp16.onnx — face swapper
+
+This is the core model that performs the actual face swap. It takes the source face embedding and the target face region as input and outputs the swapped face. When running with CUDA, Deep-Live-Cam automatically selects the FP16 model if it is present in the `models/` folder, and falls back to the FP32 variant (`inswapper_128.onnx`) on older NVIDIA GPUs where FP16 can produce numerical errors (GTX 16xx series and earlier).
+
+**Download:** [inswapper_128_fp16.onnx](https://huggingface.co/hacksider/deep-live-cam/resolve/main/inswapper_128_fp16.onnx)
+
+### GFPGANv1.4.onnx — face enhancer
+
+GFPGAN is an optional face restoration model that sharpens and improves the quality of the swapped face output. It is enabled via the `--frame-processor face_enhancer` flag or through the GUI. Without this model, the face enhancer processor will not start.
+
+**Download:** [GFPGANv1.4.onnx](https://huggingface.co/hacksider/deep-live-cam/resolve/main/GFPGANv1.4.onnx)
+
+<Note>
+  All models are hosted on Hugging Face at [huggingface.co/hacksider/deep-live-cam](https://huggingface.co/hacksider/deep-live-cam/tree/main). You can browse the full repository there to see all available model variants.
+</Note>
+
+---
+
+## Where to place the models
+
+Both files must be placed in the `models/` folder at the root of the cloned repository:
+
+```
+Deep-Live-Cam/
+├── models/
+│   ├── inswapper_128_fp16.onnx
+│   └── GFPGANv1.4.onnx
+├── modules/
+├── run.py
+└── requirements.txt
+```
+
+The application looks for models in this directory by resolving the path relative to the source files. If models are missing, the corresponding processor will print an error and refuse to start.
+
+---
+
+## buffalo_l — face analyser (auto-downloaded)
+
+The `buffalo_l` model pack is used by the InsightFace library for face detection, recognition, and landmark extraction. It powers all face analysis in Deep-Live-Cam, including finding faces in the source image, matching them to target faces, and providing the face embeddings that drive the swap.
+
+You do not need to download this model manually. InsightFace will download and cache it automatically the first time you run `python run.py`. The download is approximately 300 MB and is stored in the InsightFace model cache directory (`~/.insightface/models/buffalo_l/` on most systems).
+
+<Info>
+  The `buffalo_l` pack includes a face detection model (RetinaFace), a face recognition model, and a 106-point landmark model. Deep-Live-Cam skips the landmark model during face swapping when mouth masking and face enhancement are both disabled, reducing per-frame inference time.
+</Info>
+
+---
+
+## Download steps
+
+<Steps>
+  <Step title="Download the model files">
+    Download both ONNX files from Hugging Face:
+
+    - [inswapper_128_fp16.onnx](https://huggingface.co/hacksider/deep-live-cam/resolve/main/inswapper_128_fp16.onnx)
+    - [GFPGANv1.4.onnx](https://huggingface.co/hacksider/deep-live-cam/resolve/main/GFPGANv1.4.onnx)
+  </Step>
+
+  <Step title="Place them in the models/ folder">
+    Move or copy both downloaded files into the `models/` directory at the root of your Deep-Live-Cam clone. Create the directory if it does not exist:
+
+    ```bash
+    mkdir -p models
+    mv ~/Downloads/inswapper_128_fp16.onnx models/
+    mv ~/Downloads/GFPGANv1.4.onnx models/
+    ```
+  </Step>
+
+  <Step title="Run Deep-Live-Cam">
+    Start the application. InsightFace will download the `buffalo_l` model automatically on first run:
+
+    ```bash
+    python run.py
+    ```
+
+    Expect the first launch to take longer than usual while the `buffalo_l` model (~300 MB) downloads and caches.
+  </Step>
+</Steps>
+
+---
+
+## Model summary
+
+| Model | Purpose | Source | Auto-downloaded |
+|---|---|---|---|
+| `inswapper_128_fp16.onnx` | Face swapping | Hugging Face | No — manual download required |
+| `GFPGANv1.4.onnx` | Face enhancement | Hugging Face | No — manual download required |
+| `buffalo_l` | Face detection and recognition | InsightFace | Yes — on first run |

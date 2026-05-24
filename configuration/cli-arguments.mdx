@@ -1,0 +1,129 @@
+---
+title: "CLI arguments reference for Deep-Live-Cam"
+description: "Complete reference for all Deep-Live-Cam command-line flags covering I/O paths, frame processors, video encoding, GPU providers, and live mode settings."
+---
+
+Deep-Live-Cam can run in two modes: a graphical interface launched with no arguments, and a headless CLI mode activated by supplying at least one of `-s`, `-t`, or `-o`. Every flag listed below is available in both modes, but flags that relate to on-screen controls (such as `--live-mirror`) have no visible effect when the GUI is absent.
+
+## I/O paths
+
+| Flag | Alias | Type | Description |
+|------|-------|------|-------------|
+| `--source` | `-s` | `path` | Source image containing the face to swap in. Providing this flag (or `-t`/`-o`) activates headless mode. |
+| `--target` | `-t` | `path` | Target image or video file to process. |
+| `--output` | `-o` | `path` | Output file path or directory. The final name is derived automatically when omitted. |
+
+<Note>
+Passing any of `-s`, `-t`, or `-o` sets `headless = True` in `modules.globals`, which skips the GUI window entirely and calls `start()` directly.
+</Note>
+
+## Frame processors
+
+| Flag | Default | Choices | Description |
+|------|---------|---------|-------------|
+| `--frame-processor` | `face_swapper` | `face_swapper` `face_enhancer` `face_enhancer_gpen256` `face_enhancer_gpen512` | One or more processors to run on each frame, evaluated left to right. Accepts multiple values. |
+
+```bash
+# Swap only
+python run.py -s source.jpg -t video.mp4 --frame-processor face_swapper
+
+# Swap then enhance
+python run.py -s source.jpg -t video.mp4 --frame-processor face_swapper face_enhancer
+```
+
+## Processing options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--keep-fps` | `False` | Preserve the original frame rate of the target video. When disabled, output defaults to 30 fps. |
+| `--keep-audio` | `True` | Mux the original audio stream back into the processed video using FFmpeg. |
+| `--keep-frames` | `False` | Retain the extracted per-frame PNG files on disk after encoding finishes. |
+| `--many-faces` | `False` | Apply the swap to every detected face in the frame instead of just the most prominent one. |
+| `--nsfw-filter` | `False` | Run an NSFW classifier on the target before processing and abort if content is flagged. |
+| `--map-faces` | `False` | Enable multi-face mapping mode; uses `source_target_map` to match specific source faces to specific target faces. Disables the in-memory FFmpeg pipeline and forces disk-based frame extraction. |
+| `--mouth-mask` | `False` | Composite the original mouth region back over the swapped face to preserve natural lip movement and teeth. |
+
+<Tip>
+Use `--many-faces` when the target contains a crowd or multiple subjects. For precise per-identity control over who gets swapped, use `--map-faces` with the GUI's face-mapping panel instead.
+</Tip>
+
+## Video encoding
+
+| Flag | Default | Choices / Range | Description |
+|------|---------|-----------------|-------------|
+| `--video-encoder` | `libx264` | `libx264` `libx265` `libvpx-vp9` | FFmpeg codec for the output video. On CUDA hardware, `libx264` is automatically promoted to `h264_nvenc` and `libx265` to `hevc_nvenc`. On DirectML hardware, these map to `h264_amf` and `hevc_amf` respectively. |
+| `--video-quality` | `18` | `0`–`51` | CRF value passed to the encoder. Lower values produce larger, higher-quality files; higher values produce smaller files with more compression artifacts. |
+
+<Tabs>
+  <Tab title="H.264 (default)">
+    ```bash
+    python run.py -s source.jpg -t input.mp4 \
+      --video-encoder libx264 \
+      --video-quality 18
+    ```
+    Good balance of compatibility and file size. Playable on virtually all devices.
+  </Tab>
+  <Tab title="H.265">
+    ```bash
+    python run.py -s source.jpg -t input.mp4 \
+      --video-encoder libx265 \
+      --video-quality 18
+    ```
+    ~40% smaller files than H.264 at equivalent quality. Requires hardware or software decoder support.
+  </Tab>
+  <Tab title="VP9">
+    ```bash
+    python run.py -s source.jpg -t input.mp4 \
+      --video-encoder libvpx-vp9 \
+      --video-quality 18
+    ```
+    Royalty-free codec. Best for web delivery; encoding is slower than H.264.
+  </Tab>
+</Tabs>
+
+## Live mode
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--live-mirror` | `False` | Flip the live webcam output horizontally, matching the natural mirror orientation of a front-facing camera. |
+| `--live-resizable` | `False` | Allow the live preview window to be resized by dragging its edges. |
+| `-l` / `--lang` | `en` | UI language code for the GUI interface. Has no effect in headless mode. |
+
+## Performance and memory
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--max-memory` | `4` (macOS) / `16` (others) | Hard RAM cap in GB. Enforced via `resource.setrlimit` on Linux/macOS and `SetProcessWorkingSetSize` on Windows. |
+| `--execution-provider` | auto-detected | One or more ONNX Runtime execution providers. Auto-detection order: `cuda` → `rocm` → `coreml` → `dml` → `cpu`. |
+| `--execution-threads` | auto-detected | Thread count for parallel frame processing. Defaults: `1` for DML/ROCm, `2` for CUDA, `max(4, min(cpu_count - 2, 16))` for CPU. |
+
+```bash
+# Run on NVIDIA GPU with 2 threads and 8 GB memory limit
+python run.py -s source.jpg -t video.mp4 \
+  --execution-provider cuda \
+  --execution-threads 2 \
+  --max-memory 8
+```
+
+<Warning>
+Setting `--max-memory` below the size of the model weights will cause the process to be killed by the OS. The `inswapper_128_fp16.onnx` model alone requires approximately 500 MB.
+</Warning>
+
+## Utility
+
+| Flag | Alias | Description |
+|------|-------|-------------|
+| `--version` | `-v` | Print the application name and version string, then exit. |
+
+## Deprecated flags
+
+These flags are still accepted to avoid breaking existing scripts, but they print a deprecation warning and will be removed in a future release.
+
+| Deprecated flag | Replacement | Notes |
+|----------------|-------------|-------|
+| `-f` / `--face` | `-s` / `--source` | Source image path. |
+| `--cpu-cores` | `--execution-threads` | Thread count. |
+| `--gpu-vendor nvidia` | `--execution-provider cuda` | |
+| `--gpu-vendor apple` | `--execution-provider coreml` | |
+| `--gpu-vendor amd` | `--execution-provider rocm` | |
+| `--gpu-threads` | `--execution-threads` | |

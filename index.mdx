@@ -1,133 +1,69 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
-icon: 'star'
+title: "Deep-Live-Cam: Real-Time AI Face Swap"
+description: "Swap faces in real time using a single photo. Deep-Live-Cam brings AI-powered deepfake technology to your webcam, videos, and images with one click."
 ---
 
-## Setting up
+Deep-Live-Cam is an open-source AI tool that performs real-time face swapping using a single source image. Whether you're doing a live webcam session, processing a video file, or swapping faces in photos, Deep-Live-Cam handles it all with GPU-accelerated inference powered by InsightFace and ONNX Runtime.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Go from zero to live face swap in under 5 minutes
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Installation" icon="download" href="/installation/requirements">
+    Set up Python, ffmpeg, models, and dependencies
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="GPU Acceleration" icon="bolt" href="/installation/gpu-acceleration">
+    Enable CUDA, CoreML, DirectML, or OpenVINO for maximum performance
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="CLI Arguments" icon="terminal" href="/configuration/cli-arguments">
+    Full reference for all command-line flags and options
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## What you can do
 
-Everything you need to create world-class documentation.
+Deep-Live-Cam supports multiple modes to fit different workflows, all in real time.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
+<CardGroup cols={2}>
+  <Card title="Live Webcam Mode" icon="camera" href="/usage/webcam-mode">
+    Stream your face-swapped feed live — capture with OBS or any screen recorder
   </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
+  <Card title="Image & Video Mode" icon="film" href="/usage/image-video-mode">
+    Process photos and video files with face swap and enhancement
   </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
+  <Card title="Face Mapping" icon="users" href="/usage/face-mapping">
+    Swap multiple faces simultaneously with individual source assignments
   </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
+  <Card title="Frame Processors" icon="wand-magic-sparkles" href="/configuration/frame-processors">
+    Combine face swapper with GFPGAN or GPEN face enhancers
   </Card>
-</Columns>
+</CardGroup>
 
-## Make your content agent ready
+## Key features
 
-Make your docs work for humans and AI agents alike.
+- **Single-image source** — one photo is all you need to swap any face
+- **Real-time performance** — GPU-accelerated inference keeps up with live video
+- **Mouth mask** — preserve your natural lip movement during live swaps
+- **Multi-face mapping** — assign different source faces to different targets simultaneously
+- **Cross-platform GPU support** — NVIDIA CUDA, Apple CoreML, AMD DirectML, Intel OpenVINO
+- **NSFW filtering** — built-in content check prevents processing inappropriate media
+- **Headless/CLI mode** — automate batch processing without the GUI
 
-<Columns cols={2}>
-  <Card
-    title="Prompt component"
-    icon="robot"
-    href="/agent-ready/prompt"
-  >
-    Embed shareable AI prompts readers can copy or open in Cursor.
-  </Card>
-  <Card
-    title="Visibility"
-    icon="eye"
-    href="/agent-ready/visibility"
-  >
-    Show different content to humans and agents reading your docs.
-  </Card>
-  <Card
-    title="Contextual menu"
-    icon="bolt"
-    href="/agent-ready/contextual"
-  >
-    Give readers one-click access to Claude, ChatGPT, Cursor, and more.
-  </Card>
-  <Card
-    title="AI coding tools"
-    icon="wand-magic-sparkles"
-    href="/ai-tools/claude-code"
-  >
-    Set up Claude Code, Cursor, or Windsurf with Mintlify's skill.
-  </Card>
-</Columns>
+<Steps>
+  <Step title="Install prerequisites">
+    Install Python 3.11, pip, git, and ffmpeg on your system
+  </Step>
+  <Step title="Download models">
+    Get GFPGANv1.4 and inswapper\_128\_fp16.onnx from HuggingFace and place them in the `models/` folder
+  </Step>
+  <Step title="Install dependencies">
+    Run `pip install -r requirements.txt` inside a virtual environment
+  </Step>
+  <Step title="Launch">
+    Run `python run.py` to open the GUI and start swapping faces in real time
+  </Step>
+</Steps>
 
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<Note>
+  Deep-Live-Cam requires Python 3.11 and ffmpeg. For the best experience, a discrete NVIDIA or Apple Silicon GPU is recommended but not required — CPU mode works too.
+</Note>

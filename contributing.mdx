@@ -1,0 +1,104 @@
+---
+title: "Contributing to Deep-Live-Cam"
+description: "Learn how to contribute to Deep-Live-Cam. Covers branching strategy, pre-pull-request testing checklist, stability requirements, and the review process."
+---
+
+Deep-Live-Cam is an open-source project and welcomes contributions. Because the application runs in real time and depends on GPU performance, contributions carry a higher testing burden than a typical Python project — a change that introduces a one-second boot regression or causes GPU overload after ten minutes of use is a breaking change. Read this page before opening a pull request.
+
+## Branching strategy
+
+The `main` branch is the stable release branch. **Never push directly to `main`.** All contributions go through one of two integration branches depending on the scope of the change.
+
+<CardGroup cols={2}>
+  <Card title="premain" icon="code-branch">
+    The default integration branch for all contributions. Push your changes here first. The maintainers run tests on `premain` for several hours or days before merging to `main`.
+  </Card>
+  <Card title="experimental" icon="flask">
+    Reserved for large or potentially disruptive changes. Use this branch when your change is likely to break existing behavior or requires extended discussion before it can be considered for merge.
+  </Card>
+</CardGroup>
+
+<Warning>
+  Pull requests targeting `main` directly will be closed. Always target `premain` (or `experimental` for large changes).
+</Warning>
+
+## Pre-pull-request checklist
+
+Run every item in this checklist before opening a PR. The maintainers will ask you to re-test and update if any item is not confirmed.
+
+### Functionality tests
+
+<AccordionGroup>
+  <Accordion title="Realtime face swap — enhancer on and off">
+    Launch Deep-Live-Cam and perform a live face swap twice: once with the face enhancer **enabled** and once with it **disabled**. Confirm that:
+
+    - The swap applies correctly in both modes.
+    - No error is raised when toggling the enhancer between sessions.
+    - Output quality is visually acceptable in both states.
+  </Accordion>
+
+  <Accordion title="Map faces — enabled and disabled">
+    Test the map faces feature in both states:
+
+    - With map faces **enabled**: assign at least two different source faces to two different subjects in the same frame and confirm each is swapped independently.
+    - With map faces **disabled**: confirm the default single-face swap behavior still works correctly.
+  </Accordion>
+
+  <Accordion title="Camera listing">
+    Open the camera selection dropdown in the GUI and verify that all cameras attached to the test machine are listed accurately. If your change touches any device enumeration, webcam initialisation, or GUI code, this test is mandatory.
+  </Accordion>
+</AccordionGroup>
+
+### Stability tests
+
+<AccordionGroup>
+  <Accordion title="Realtime FPS — no regression">
+    Measure the live FPS before and after your change. The frame rate must not drop compared to the baseline on the same hardware. Use the same execution provider and thread count for a fair comparison.
+  </Accordion>
+
+  <Accordion title="Boot time — no regression">
+    Measure the time from running `python run.py` to the GUI window appearing, and the time from clicking **Live** to the first swapped preview frame appearing. Neither value should be higher than the baseline.
+  </Accordion>
+
+  <Accordion title="GPU stability — 15-minute stress test">
+    Run the live face swap continuously for a **minimum of 15 minutes** and monitor GPU utilisation and temperature. The application must not crash, hang, or cause GPU overloading during this period. This test is required for any change that touches the inference pipeline, frame processor, or threading code.
+
+    <Warning>
+      GPU overloading can cause system-wide instability. Run this test on a machine where you can afford a potential crash, and monitor temperatures with a tool such as `nvidia-smi` or GPU-Z.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="App responsiveness — no lag">
+    During and after the 15-minute stress test, interact with the GUI (switch source faces, toggle options, resize the window). The application must remain responsive and not exhibit lag or UI freezes.
+  </Accordion>
+</AccordionGroup>
+
+## Submitting a pull request
+
+Once all checklist items pass, submit your PR against the `premain` branch (or `experimental` for large changes):
+
+<Steps>
+  <Step title="Fork and branch">
+    Fork the repository and create a descriptive branch name, for example `fix/camera-listing-linux` or `feat/frame-interpolation-tuning`.
+  </Step>
+
+  <Step title="Run the checklist">
+    Complete every item in the pre-PR checklist above and note the results. You will need to summarise your testing in the PR description.
+  </Step>
+
+  <Step title="Open the PR against premain">
+    Open the pull request targeting the `premain` branch. In the description, include:
+
+    - A summary of what the change does and why.
+    - Which checklist items you tested and on what hardware/OS.
+    - Any known limitations or follow-up work.
+  </Step>
+
+  <Step title="Review and merge cycle">
+    The maintainers will test your branch on `premain` for several hours or days. Changes will only be promoted to `main` after passing that sustained test period. Be available to address review comments promptly.
+  </Step>
+</Steps>
+
+<Note>
+  If your change is specifically a macOS fix or optimisation, include the output of `brew list | grep python` and the result of `python3.11 --version` in your PR description so reviewers can reproduce your environment.
+</Note>

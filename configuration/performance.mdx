@@ -1,0 +1,197 @@
+---
+title: "Performance tuning and memory configuration"
+description: "Optimize Deep-Live-Cam performance with thread tuning, memory limits, GPU provider selection, and platform-specific settings for NVIDIA, Apple Silicon, and AMD."
+---
+
+Deep-Live-Cam ships with sensible defaults that work on most machines, but getting the best throughput requires matching the execution provider, thread count, and memory limit to your actual hardware. This guide explains exactly how those defaults are derived, when to override them, and what platform-specific constraints to watch for.
+
+## Execution providers
+
+The execution provider controls which hardware ONNX Runtime uses to run the face models. Deep-Live-Cam picks a provider automatically at startup using `suggest_default_execution_provider` in `modules/core.py`, which probes the list returned by `onnxruntime.get_available_providers()` and selects the first match in priority order.
+
+**Auto-detection order:** `cuda` → `rocm` → `coreml` → `dml` → `cpu`
+
+<Tabs>
+  <Tab title="NVIDIA (CUDA)">
+    Requires `onnxruntime-gpu` and CUDA Toolkit 12.8.0 with cuDNN v8.9.7.
+
+    ```bash
+    python run.py -s source.jpg -t video.mp4 \
+      --execution-provider cuda \
+      --execution-threads 2
+    ```
+
+    On CUDA, the in-memory FFmpeg pipeline also promotes `libx264` to `h264_nvenc` and `libx265` to `hevc_nvenc` automatically, offloading encoding to the NVENC hardware unit.
+  </Tab>
+  <Tab title="Apple Silicon (CoreML)">
+    Requires macOS 12+ and `onnxruntime-silicon`. The ANE (Apple Neural Engine) handles inference; the default memory cap is reduced to 4 GB to match unified-memory constraints.
+
+    ```bash
+    python run.py -s source.jpg -t video.mp4 \
+      --execution-provider coreml
+    ```
+
+    Thread count does not affect ANE throughput—leave `--execution-threads` at its default.
+  </Tab>
+  <Tab title="AMD (ROCm)">
+    Requires `onnxruntime-rocm` on Linux with ROCm 5.4+.
+
+    ```bash
+    python run.py -s source.jpg -t video.mp4 \
+      --execution-provider rocm \
+      --execution-threads 1
+    ```
+
+    ROCm defaults to 1 execution thread. Raising it rarely improves throughput because the GPU serializes ONNX sessions internally.
+  </Tab>
+  <Tab title="DirectML (Windows AMD/Intel)">
+    Requires `onnxruntime-directml` on Windows. Covers AMD, Intel, and any DX12-capable GPU.
+
+    ```bash
+    python run.py -s source.jpg -t video.mp4 \
+      --execution-provider dml
+    ```
+
+    Like ROCm, DML defaults to 1 thread. On AMD hardware the in-memory pipeline also promotes the encoder to `h264_amf` or `hevc_amf`.
+  </Tab>
+  <Tab title="CPU">
+    No additional packages required. Useful as a fallback when no supported GPU is available.
+
+    ```bash
+    python run.py -s source.jpg -t video.mp4 \
+      --execution-provider cpu \
+      --execution-threads 8
+    ```
+
+    CPU inference is significantly slower than any GPU path for real-time use. Use it only for testing or on machines without a discrete GPU.
+  </Tab>
+</Tabs>
+
+<Note>
+When any `--execution-provider` value is given on the command line, `OMP_NUM_THREADS` is set to `6` before PyTorch is imported. This is done at module-load time in `modules/core.py` because OpenMP threads must be pinned before the first `import torch`.
+</Note>
+
+## Thread count
+
+The `--execution-threads` flag controls the `ThreadPoolExecutor` worker count in `multi_process_frame`. The default is chosen by `suggest_execution_threads` based on the active provider:
+
+| Provider | Default threads | Rationale |
+|----------|----------------|-----------|
+| DML | 1 | DirectML serializes ONNX sessions; extra threads stall on the DML lock. |
+| ROCm | 1 | Same serialization behavior as DML. |
+| CUDA | 2 | Two threads keep the GPU fed while I/O occurs on the other thread. |
+| CPU | `max(4, min(cpu_count − 2, 16))` | Uses most available cores, reserving 2 for the OS and FFmpeg. |
+
+```python
+# From modules/core.py — suggest_execution_threads()
+if 'DmlExecutionProvider' in modules.globals.execution_providers:
+    return 1
+if 'ROCMExecutionProvider' in modules.globals.execution_providers:
+    return 1
+if 'CUDAExecutionProvider' in modules.globals.execution_providers:
+    return 2
+return max(4, min(cpu_count - 2, 16))
+```
+
+<Tip>
+For CUDA users, 2 threads is the sweet spot found empirically. Going higher causes CUDA context contention that actually reduces throughput. For CPU users on a 12-core machine, the formula yields `max(4, min(10, 16)) = 10`.
+</Tip>
+
+## Memory limits
+
+`--max-memory` sets a hard RAM ceiling enforced by `limit_resources` in `modules/core.py` after argument parsing completes.
+
+**Platform defaults:**
+- **macOS:** 4 GB — conservative default to avoid pressure on unified memory shared with the GPU.
+- **All other platforms:** 16 GB.
+
+The limit is applied using the OS memory API:
+
+```python
+# From modules/core.py — limit_resources()
+if platform.system().lower() == 'windows':
+    kernel32.SetProcessWorkingSetSize(-1, memory, memory)
+else:
+    resource.setrlimit(resource.RLIMIT_DATA, (memory, memory))
+```
+
+<Warning>
+Setting `--max-memory` too low will cause the process to be terminated by the OS mid-run. The `inswapper_128_fp16.onnx` model alone occupies roughly 500 MB; budget at least 2 GB for swapper-only mode and 4 GB when chaining enhancers.
+</Warning>
+
+## TensorFlow GPU memory growth
+
+If TensorFlow is installed, `limit_resources` also enables memory growth for every visible GPU device:
+
+```python
+# Prevents TensorFlow from pre-allocating all available VRAM
+for gpu in tensorflow.config.experimental.list_physical_devices('GPU'):
+    tensorflow.config.experimental.set_memory_growth(gpu, True)
+```
+
+This prevents TensorFlow from pre-allocating all available VRAM at startup, which would otherwise starve ONNX Runtime and the encoder.
+
+## CUDA cache management
+
+After each frame processor finishes its pass, `release_resources` in `modules/core.py` flears the PyTorch CUDA allocator cache:
+
+```python
+# From modules/core.py — release_resources()
+if 'CUDAExecutionProvider' in modules.globals.execution_providers and HAS_TORCH:
+    torch.cuda.empty_cache()
+```
+
+This runs between every processor in the pipeline (e.g., between `face_swapper` and `face_enhancer`), keeping peak VRAM usage predictable across a long video.
+
+## In-memory vs. disk-based pipeline
+
+By default, Deep-Live-Cam avoids writing per-frame PNG files to disk. Instead it pipes raw BGR24 frames directly from an FFmpeg decoder into Python, processes them, and pushes them into a second FFmpeg encoder process. This eliminates the largest I/O bottleneck in earlier versions.
+
+The disk-based fallback is used automatically when:
+- `--map-faces` is active (multi-face mapping requires random frame access).
+- The FFmpeg pipe pipeline fails (e.g., the hardware encoder is unavailable).
+
+## Tuning recommendations by hardware tier
+
+<Steps>
+  <Step title="High-end NVIDIA GPU (RTX 3080+, 10 GB+ VRAM)">
+    ```bash
+    python run.py -s source.jpg -t video.mp4 \
+      --frame-processor face_swapper face_enhancer \
+      --execution-provider cuda \
+      --execution-threads 2 \
+      --max-memory 16 \
+      --keep-fps
+    ```
+    Enable `face_enhancer` for maximum quality. The NVENC hardware encoder handles output encoding in parallel with ONNX inference.
+  </Step>
+  <Step title="Mid-range NVIDIA GPU (RTX 3060, 6–8 GB VRAM)">
+    ```bash
+    python run.py -s source.jpg -t video.mp4 \
+      --frame-processor face_swapper face_enhancer_gpen256 \
+      --execution-provider cuda \
+      --execution-threads 2 \
+      --max-memory 8
+    ```
+    Use `face_enhancer_gpen256` instead of GFPGAN to stay within VRAM budget while still improving output quality.
+  </Step>
+  <Step title="Apple Silicon (M1/M2/M3)">
+    ```bash
+    python run.py -s source.jpg -t video.mp4 \
+      --frame-processor face_swapper \
+      --execution-provider coreml \
+      --max-memory 4
+    ```
+    CoreML routes inference to the ANE. Avoid adding enhancers for live use; the ANE has limited concurrency for multiple large models.
+  </Step>
+  <Step title="CPU only">
+    ```bash
+    python run.py -s source.jpg -t video.mp4 \
+      --frame-processor face_swapper \
+      --execution-provider cpu \
+      --execution-threads 8 \
+      --max-memory 16
+    ```
+    Skip all enhancers. Maximize `--execution-threads` up to `cpu_count - 2`. Do not use for real-time/live mode.
+  </Step>
+</Steps>

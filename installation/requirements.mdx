@@ -1,0 +1,169 @@
+---
+title: "System requirements and installation"
+description: "Install Deep-Live-Cam on Windows, macOS, or Linux. Covers Python 3.11, ffmpeg, virtual environment setup, and dependency installation via pip."
+---
+
+Deep-Live-Cam requires a specific set of tools before you can install its Python dependencies. Python 3.11 is the only supported version — the project does not work with Python 3.12 or 3.13 due to incompatibilities in some dependencies. Follow the steps below to set up your environment on Windows, macOS, or Linux.
+
+<Warning>
+  **Python 3.11 is required.** Do not use Python 3.12 or 3.13. On macOS, always use the `python3.11` command explicitly if you have multiple Python versions installed to avoid loading the wrong interpreter.
+</Warning>
+
+## Prerequisites
+
+Before cloning the repository, make sure the following tools are installed on your system:
+
+- **Python 3.11** — the only supported version
+- **pip** — bundled with Python; used to install Python packages
+- **git** — needed to clone the repository
+- **ffmpeg** — required for video processing; the application will not start without it
+- **Visual Studio 2022 Runtimes** (Windows only) — required C++ runtime libraries
+
+### Install ffmpeg
+
+<Tabs>
+  <Tab title="Windows">
+    Run the following command in PowerShell to install ffmpeg automatically:
+
+    ```powershell
+    iex (irm ffmpeg.tc.ht)
+    ```
+  </Tab>
+  <Tab title="macOS">
+    Install ffmpeg with Homebrew:
+
+    ```bash
+    brew install ffmpeg
+    ```
+  </Tab>
+  <Tab title="Linux (apt)">
+    Install ffmpeg with apt on Debian/Ubuntu:
+
+    ```bash
+    sudo apt update && sudo apt install ffmpeg
+    ```
+  </Tab>
+  <Tab title="Linux (dnf)">
+    Install ffmpeg with dnf on Fedora/RHEL:
+
+    ```bash
+    sudo dnf install ffmpeg
+    ```
+  </Tab>
+</Tabs>
+
+### Install Visual Studio 2022 Runtimes (Windows only)
+
+Download and install the [Visual C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) from Microsoft. These runtimes are required by several compiled Python packages that Deep-Live-Cam depends on.
+
+---
+
+## Installation
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the Deep-Live-Cam repository from GitHub:
+
+    ```bash
+    git clone https://github.com/hacksider/Deep-Live-Cam.git
+    cd Deep-Live-Cam
+    ```
+  </Step>
+
+  <Step title="Install Python 3.11 (macOS only)">
+    On macOS, use Homebrew to install the correct Python version and its tkinter package (required for the GUI):
+
+    ```bash
+    brew install python@3.11
+    brew install python-tk@3.11
+    ```
+
+    <Note>
+      If you get an error about `_tkinter` missing when launching the app, reinstall the package with `brew reinstall python-tk@3.11`.
+    </Note>
+  </Step>
+
+  <Step title="Create a virtual environment">
+    Using a virtual environment isolates Deep-Live-Cam's dependencies from your system Python installation and avoids version conflicts.
+
+    <Tabs>
+      <Tab title="Windows">
+        ```bash
+        python -m venv venv
+        venv\Scripts\activate
+        ```
+      </Tab>
+      <Tab title="macOS">
+        On macOS, use `python3.11` explicitly to ensure the virtual environment is created with the correct version:
+
+        ```bash
+        python3.11 -m venv venv
+        source venv/bin/activate
+        ```
+      </Tab>
+      <Tab title="Linux">
+        ```bash
+        python3 -m venv venv
+        source venv/bin/activate
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Install Python dependencies">
+    With the virtual environment active, install all required packages:
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+    This installs packages including `insightface`, `onnxruntime`, `opencv-python`, `PySide6`, `numpy`, and others listed in `requirements.txt`.
+  </Step>
+
+  <Step title="Download the AI models">
+    See [Download and configure AI models](/installation/models) for instructions on downloading the required ONNX model files and placing them in the `models/` folder.
+  </Step>
+
+  <Step title="Run Deep-Live-Cam">
+    Start the application with:
+
+    <Tabs>
+      <Tab title="Windows / Linux">
+        ```bash
+        python run.py
+        ```
+      </Tab>
+      <Tab title="macOS">
+        ```bash
+        python3.11 run.py
+        ```
+      </Tab>
+    </Tabs>
+
+    <Note>
+      The first time you run the application, InsightFace will automatically download the `buffalo_l` face analysis model (~300 MB). This only happens once; subsequent launches use the cached files.
+    </Note>
+  </Step>
+</Steps>
+
+---
+
+## Reinstalling the virtual environment
+
+If something goes wrong with your environment, remove it and start fresh:
+
+```bash
+deactivate
+rm -rf venv
+python -m venv venv
+source venv/bin/activate   # or venv\Scripts\activate on Windows
+pip install -r requirements.txt
+```
+
+If you encounter errors related to `gfpgan` or `basicsr` on macOS, reinstall them from source:
+
+```bash
+pip install git+https://github.com/xinntao/BasicSR.git@master
+pip uninstall gfpgan -y
+pip install git+https://github.com/TencentARC/GFPGAN.git@master
+```

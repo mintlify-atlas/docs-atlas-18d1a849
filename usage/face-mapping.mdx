@@ -1,0 +1,194 @@
+---
+title: "Map multiple faces in Deep-Live-Cam"
+description: "Deep-Live-Cam's face mapping assigns different source faces to multiple targets simultaneously. Learn how to configure many-faces and map-faces modes."
+---
+
+Face mapping lets you control exactly which source face replaces which target face when a scene contains multiple people. Without it, Deep-Live-Cam either swaps only the primary face or applies one source face to every detected face. With mapping enabled you open a dialog, see each unique face found in the target, and assign a separate source image to each one.
+
+## Two multi-face modes
+
+Deep-Live-Cam exposes two distinct approaches to handling multiple faces, controlled by the `many_faces` and `map_faces` globals:
+
+<Tabs>
+  <Tab title="Many faces">
+    **Many faces** (`--many-faces` / `globals.many_faces`) processes every detected face in each frame and applies the same default source image to all of them. This is the fast path — no mapping dialog, no per-face source assignment.
+
+    Use this when you want every person in the scene to wear the same face, or when you are using live mode and want all faces in frame to be swapped simultaneously.
+
+    ```bash
+    python run.py -s source.jpg -t group.mp4 -o output.mp4 --many-faces
+    ```
+
+    In the GUI, toggle **Many faces** in the Options card.
+  </Tab>
+  <Tab title="Map faces">
+    **Map faces** (`--map-faces` / `globals.map_faces`) opens the **Source × Target Mapper** dialog after clicking **Start** (or **Live**). You see a thumbnail for each unique face found in the target, and you assign a different source image to each one individually.
+
+    This mode uses the disk-based frame extraction pipeline for videos because face cluster information must be precomputed across all frames before processing begins.
+
+    ```bash
+    python run.py --map-faces
+    ```
+
+    In the GUI, toggle **Map faces** in the Options card.
+  </Tab>
+</Tabs>
+
+<Note>
+Both `many_faces` and `map_faces` can be set independently. If `map_faces` is enabled it takes precedence over `many_faces` in the processing logic.
+</Note>
+
+## How face detection works for mapping
+
+When you click **Start** with **Map faces** enabled, Deep-Live-Cam analyses the target before opening the mapper dialog:
+
+<Steps>
+  <Step title="Image targets">
+    `get_unique_faces_from_target_image()` reads the target image with OpenCV, runs `get_many_faces()` (InsightFace detection + recognition), and builds one entry in `source_target_map` per detected face, each containing the face bounding box crop and the `Face` object with its embedding.
+  </Step>
+  <Step title="Video targets">
+    `get_unique_faces_from_target_video()` extracts all frames to disk, runs face detection on each frame, collects every face embedding, then passes them to `find_cluster_centroids()` in `modules/cluster_analysis.py`. Cluster analysis groups visually similar faces across frames so that the same person appearing in 300 frames counts as one unique identity rather than 300 separate targets. Each cluster becomes one entry in `source_target_map`.
+  </Step>
+  <Step title="Mapper dialog opens">
+    Once `source_target_map` is populated, the **Source × Target Mapper** dialog opens. Each row shows a 100 × 100 thumbnail of a unique target face. You click the thumbnail (or a file button) beside each target face to assign a source image.
+  </Step>
+  <Step title="Processing begins">
+    After you click **Submit**, processing starts using the completed map. For each frame, the swapper looks up which cluster centroid is closest to the detected face's embedding and applies the corresponding source face.
+  </Step>
+</Steps>
+
+## The `source_target_map` data structure
+
+`globals.source_target_map` is a `List[Dict[str, Any]]`. Each entry represents one unique target identity:
+
+```python
+# Image target entry (after detection, before source assignment)
+{
+    'id': 0,
+    'target': {
+        'cv2': <numpy ndarray>,   # cropped face region (BGR)
+        'face': <Face object>     # InsightFace Face with .normed_embedding, .bbox, etc.
+    }
+}
+
+# Video target entry (after cluster analysis)
+{
+    'id': 0,
+    'target': {
+        'cv2': <numpy ndarray>,   # best-quality crop from the video
+        'face': <Face object>     # highest det_score face for this cluster
+    },
+    'target_faces_in_frame': [
+        {
+            'frame': 42,
+            'faces': [<Face>, ...],          # faces belonging to cluster 0 in this frame
+            'location': '/tmp/.../0042.png'
+        },
+        ...
+    ]
+}
+
+# After the user assigns a source in the mapper dialog
+{
+    'id': 0,
+    'source': {
+        'cv2': <numpy ndarray>,
+        'face': <Face object>
+    },
+    'target': { ... }
+}
+```
+
+The `id` field is a zero-based integer assigned sequentially. `add_blank_map()` creates a new entry with only `id` set (no `source` or `target`) when an additional mapping slot is needed:
+
+```python
+def add_blank_map() -> Any:
+    max_id = max(source_target_map, key=lambda x: x['id'])['id']
+    source_target_map.append({'id': max_id + 1})
+```
+
+## The `simple_map` structure for live mode
+
+The full `source_target_map` is suited to video processing where face cluster data per frame is needed. Live mode uses `globals.simple_map` — a compact structure built by `simplify_maps()` that enables fast per-frame lookup without iterating the full map:
+
+```python
+def simplify_maps() -> None:
+    centroids = []
+    faces = []
+    for map in modules.globals.source_target_map:
+        if "source" in map and "target" in map:
+            centroids.append(map['target']['face'].normed_embedding)
+            faces.append(map['source']['face'])
+    modules.globals.simple_map = {
+        'source_faces': faces,
+        'target_embeddings': centroids
+    }
+```
+
+At inference time, the live processing worker computes the cosine distance between the current detected face's `normed_embedding` and each entry in `target_embeddings`, then swaps in the `source_faces` entry at the closest index.
+
+## Validating a map
+
+`has_valid_map()` checks whether at least one entry in `source_target_map` has both `source` and `target` keys. If the mapper dialog is submitted without assigning any sources, processing does not start and the status bar shows `No faces found in target`.
+
+```python
+def has_valid_map() -> bool:
+    for map in modules.globals.source_target_map:
+        if "source" in map and "target" in map:
+            return True
+    return False
+```
+
+## GUI walkthrough
+
+<Steps>
+  <Step title="Enable Map faces">
+    In the Options card, enable the **Map faces** toggle. The toggle state is saved to `switch_states.json` immediately.
+  </Step>
+  <Step title="Select source and target">
+    Select your source face image and your target image or video as usual.
+  </Step>
+  <Step title="Click Start">
+    Deep-Live-Cam runs face detection (and cluster analysis for videos). Once complete, the **Source × Target Mapper** dialog opens — sized at 750 × 810 pixels for image/video targets or 900 × 820 pixels for live targets.
+  </Step>
+  <Step title="Assign source faces">
+    Each row shows a thumbnail of a unique target face. Click the image slot beside each target face and choose the source image you want mapped to it. You can assign the same source to multiple targets or leave entries unassigned.
+  </Step>
+  <Step title="Submit">
+    Click **Submit**. If at least one entry is valid (`has_valid_map()` returns `True`), processing begins. The mapper dialog closes.
+  </Step>
+</Steps>
+
+## CLI flags
+
+```bash
+# Swap every detected face with the same source
+python run.py -s source.jpg -t group.mp4 -o output.mp4 --many-faces
+
+# Enable map-faces mode (opens mapper if running with GUI)
+python run.py --map-faces
+
+# Combine with other options
+python run.py -s source.jpg -t scene.mp4 -o out.mp4 --map-faces --keep-fps --keep-audio
+```
+
+## Use cases
+
+<CardGroup cols={2}>
+  <Card title="Multiple speakers" icon="mic">
+    Assign a different synthetic face to each presenter in a panel discussion video. Cluster analysis groups all frames of the same person into one identity automatically.
+  </Card>
+  <Card title="Group scenes" icon="users">
+    Replace every face in a group photo or crowd shot with individually chosen source faces for creative or satirical content.
+  </Card>
+  <Card title="Live multi-face streams" icon="video">
+    Use the live mapper dialog to assign source faces per-person before starting the webcam preview. The `simple_map` structure keeps per-frame lookup fast enough for real-time use.
+  </Card>
+  <Card title="Selective swapping" icon="eye-off">
+    Leave some entries in the mapper unassigned to preserve certain faces in the scene while swapping others.
+  </Card>
+</CardGroup>
+
+<Tip>
+For long videos, the cluster analysis step during map-faces initialisation can take several minutes because it extracts all frames to disk first. Use the in-memory pipeline (no `--map-faces`) when you only have one target face and want faster results.
+</Tip>

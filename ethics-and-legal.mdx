@@ -1,0 +1,87 @@
+---
+title: "Ethics, legal guidelines, and responsible use"
+description: "Deep-Live-Cam's ethical use policy, content restrictions, AGPL-3.0 license terms, and InsightFace model non-commercial research license requirements."
+---
+
+Deep-Live-Cam is designed to be a productive tool for the AI-generated media industry. It helps artists animate custom characters, create engaging content, and prototype clothing or costume design on digital models. At the same time, the project team is fully aware that face-swapping technology can be misused, and has built both technical safeguards and explicit use requirements into the software. Using Deep-Live-Cam means accepting these terms.
+
+## Intended use
+
+The intended applications for Deep-Live-Cam are creative and productive:
+
+- Animating custom or fictional characters in real time
+- Creating entertainment content, memes, and short-form video
+- Live shows, performances, and interactive presentations
+- Clothing and costume design on digital models
+- AI-generated media production where all parties consent
+
+<Note>
+  Deep-Live-Cam is designed for legal, consensual use. Deploying it to deceive, defraud, harass, or impersonate someone without their knowledge is a violation of this policy and, in most jurisdictions, a violation of the law.
+</Note>
+
+## Ethical use requirements
+
+<AccordionGroup>
+  <Accordion title="Obtain consent when using a real person's face">
+    If you use a photograph of a real person as the source face, you must obtain that person's explicit consent before using their likeness. This applies to public figures as well as private individuals.
+
+    Using someone's face without consent to generate deepfake content — especially content that is embarrassing, defamatory, or sexual — is an ethical violation and may constitute identity theft, defamation, or non-consensual intimate imagery depending on your jurisdiction.
+  </Accordion>
+
+  <Accordion title="Label output as a deepfake when sharing online">
+    Any output you create with Deep-Live-Cam and share publicly must be clearly identified as AI-generated or deepfake content. Presenting deepfake media as authentic footage — in news, social media, video calls, or any public context — is deceptive and potentially illegal.
+
+    Practically, this means adding a visible label, caption, or watermark to videos and images before publishing them.
+  </Accordion>
+</AccordionGroup>
+
+## Content restrictions
+
+Deep-Live-Cam includes a built-in content filter powered by [opennsfw2](https://github.com/bhky/opennsfw2) that automatically prevents the application from processing:
+
+- Nudity and sexually explicit content
+- Graphic violence and gore
+- Sensitive material such as war footage
+
+This filter runs before any face swap is applied. If the input content is classified as inappropriate, processing stops immediately. The filter is an intentional part of the software and is not a bug.
+
+<Warning>
+  Attempting to bypass or disable the NSFW filter violates this policy. The project maintainers reserve the right to add watermarks or shut down the project if legally required.
+</Warning>
+
+## License
+
+### Software license — AGPL-3.0
+
+Deep-Live-Cam is released under the [GNU Affero General Public License v3.0 (AGPL-3.0)](https://github.com/hacksider/Deep-Live-Cam/blob/main/LICENSE). Key conditions:
+
+- You may use, copy, modify, and distribute the software.
+- Any modified version you distribute — including over a network — must also be released under AGPL-3.0 with source code available.
+- You may not impose additional restrictions on recipients' exercise of AGPL-3.0 rights.
+
+### InsightFace model license — non-commercial research only
+
+The face analysis models provided by [InsightFace (deepinsight)](https://github.com/deepinsight/insightface) are licensed separately from the application code. Their use is restricted to **non-commercial research purposes only**.
+
+<Warning>
+  If you intend to use Deep-Live-Cam in a commercial product or service, you may not use the InsightFace models. Review the full license terms before any commercial deployment.
+</Warning>
+
+The full InsightFace license is available at [github.com/deepinsight/insightface — License](https://github.com/deepinsight/insightface?tab=readme-ov-file#license).
+
+## User responsibility
+
+The project team provides Deep-Live-Cam as a tool. How you use it is your responsibility.
+
+- You are solely responsible for ensuring your use of Deep-Live-Cam complies with all applicable laws and regulations in your jurisdiction.
+- The project maintainers are not liable for harm caused by end-user actions.
+- By using this software you agree to use it in a manner that respects the rights and dignity of others.
+
+<CardGroup cols={2}>
+  <Card title="Ethical use summary" icon="shield-check">
+    Obtain consent, label output as deepfake when sharing, and never use the software to deceive or harm others.
+  </Card>
+  <Card title="Commercial use" icon="building">
+    The AGPL-3.0 license permits commercial use of the code, but the InsightFace models are non-commercial research only. Review both licenses before deploying commercially.
+  </Card>
+</CardGroup>

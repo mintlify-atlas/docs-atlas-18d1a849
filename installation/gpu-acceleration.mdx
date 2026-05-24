@@ -1,0 +1,146 @@
+---
+title: "Enable GPU acceleration for face swap"
+description: "Configure CUDA, CoreML, DirectML, or OpenVINO execution providers in Deep-Live-Cam for real-time performance. Includes install commands and usage flags."
+---
+
+By default, Deep-Live-Cam runs inference on the CPU, which is reliable but slow for real-time use. Enabling a GPU execution provider offloads the ONNX model inference to your hardware accelerator, significantly improving frame rates. The provider you use depends on your GPU: NVIDIA cards use CUDA, Apple Silicon uses CoreML, and AMD/Intel GPUs on Windows can use DirectML or OpenVINO.
+
+<Info>
+  Deep-Live-Cam auto-detects the best available provider at startup in this order: **cuda → rocm → coreml → dml → cpu**. You can override this with the `--execution-provider` flag.
+</Info>
+
+## Choosing a provider
+
+<Tabs>
+  <Tab title="CUDA (NVIDIA)">
+    CUDA is the recommended provider for NVIDIA GPUs (Turing architecture or newer for best performance). It requires installing the CUDA Toolkit and cuDNN before updating the Python packages.
+
+    **1. Install system dependencies**
+
+    - Download and install [CUDA Toolkit 12.8.0](https://developer.nvidia.com/cuda-12-8-0-download-archive)
+    - Download [cuDNN v8.9.7 for CUDA 12.x](https://developer.nvidia.com/rdp/cudnn-archive) and ensure the cuDNN `bin` directory is added to your system `PATH`
+
+    **2. Install Python packages**
+
+    With your virtual environment active, install PyTorch with CUDA 12.8 support and the GPU-enabled ONNX Runtime:
+
+    ```bash
+    pip install -U torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+    pip uninstall onnxruntime onnxruntime-gpu
+    pip install onnxruntime-gpu==1.21.0
+    ```
+
+    **3. Run with CUDA**
+
+    ```bash
+    python run.py --execution-provider cuda
+    ```
+
+    <Tip>
+      When CUDA is active, Deep-Live-Cam automatically selects the FP16 inswapper model (`inswapper_128_fp16.onnx`) when it is present, falling back to the FP32 variant (`inswapper_128.onnx`) on older GPUs. It also promotes `libx264` to `h264_nvenc` for hardware-accelerated video encoding.
+    </Tip>
+  </Tab>
+
+  <Tab title="CoreML (Apple Silicon)">
+    CoreML gives the best performance on Apple Silicon (M1/M2/M3/M4) by routing inference through the Neural Engine and GPU shader cores.
+
+    **Prerequisite:** Complete the macOS-specific setup first — install Python 3.11 via Homebrew and create your virtual environment with `python3.11 -m venv venv`.
+
+    **1. Install the Silicon-specific ONNX Runtime**
+
+    ```bash
+    pip uninstall onnxruntime onnxruntime-silicon
+    pip install onnxruntime-silicon==1.13.1
+    ```
+
+    **2. Run with CoreML**
+
+    ```bash
+    python3.11 run.py --execution-provider coreml
+    ```
+
+    <Warning>
+      You **must** use `python3.11` to run the app on macOS, not `python` or `python3`, if multiple Python versions are installed. Using the wrong interpreter can cause import errors or load the wrong onnxruntime package.
+    </Warning>
+  </Tab>
+
+  <Tab title="CoreML (Apple Legacy)">
+    For older Intel-based Macs or when using the legacy CoreML provider, use the standard `onnxruntime-coreml` package instead of the Silicon-specific build.
+
+    **1. Install dependencies**
+
+    ```bash
+    pip uninstall onnxruntime onnxruntime-coreml
+    pip install onnxruntime-coreml==1.21.0
+    ```
+
+    **2. Run with CoreML**
+
+    ```bash
+    python run.py --execution-provider coreml
+    ```
+  </Tab>
+
+  <Tab title="DirectML (Windows AMD/Intel)">
+    DirectML works on any DirectX 12-capable GPU on Windows, including AMD and Intel integrated and discrete GPUs. It does not require vendor-specific drivers beyond what Windows already provides.
+
+    **1. Install dependencies**
+
+    ```bash
+    pip uninstall onnxruntime onnxruntime-directml
+    pip install onnxruntime-directml==1.21.0
+    ```
+
+    **2. Run with DirectML**
+
+    ```bash
+    python run.py --execution-provider directml
+    ```
+
+    <Note>
+      DirectML sets the execution thread count to 1 automatically to avoid serialization issues with the DirectML API.
+    </Note>
+  </Tab>
+
+  <Tab title="OpenVINO (Intel)">
+    OpenVINO is Intel's inference optimization toolkit. It works on Intel CPUs, integrated graphics, and discrete Arc GPUs.
+
+    **1. Install dependencies**
+
+    ```bash
+    pip uninstall onnxruntime onnxruntime-openvino
+    pip install onnxruntime-openvino==1.21.0
+    ```
+
+    **2. Run with OpenVINO**
+
+    ```bash
+    python run.py --execution-provider openvino
+    ```
+  </Tab>
+
+  <Tab title="CPU (no GPU)">
+    If you do not have a supported GPU, Deep-Live-Cam will run on the CPU using the default `onnxruntime` package installed with `requirements.txt`. No additional installation is needed.
+
+    ```bash
+    python run.py
+    ```
+
+    CPU mode is significantly slower than GPU-accelerated providers and is not suitable for real-time webcam use on most hardware.
+  </Tab>
+</Tabs>
+
+---
+
+## Performance notes
+
+| Provider | Hardware | Real-time capable |
+|---|---|---|
+| CUDA | NVIDIA GTX 10xx+ | Yes |
+| CoreML (Silicon) | Apple M1–M4 | Yes |
+| CoreML (Legacy) | Intel Mac | Limited |
+| DirectML | AMD/Intel (Windows) | Varies |
+| OpenVINO | Intel | Varies |
+| CPU | Any | No |
+
+For the fastest inference on NVIDIA hardware, use CUDA with `onnxruntime-gpu==1.21.0`. When CUDA is active, Deep-Live-Cam automatically selects the FP16 inswapper model when available (reducing memory bandwidth) and promotes video encoding to `h264_nvenc` or `hevc_nvenc`, keeping encoding off the CPU.

@@ -1,0 +1,73 @@
+---
+title: "What is Deep-Live-Cam?"
+description: "Deep-Live-Cam is an open-source real-time face swap tool powered by InsightFace and ONNX Runtime. Swap any face using a single image on webcam, video, or photo."
+---
+
+Deep-Live-Cam is an open-source tool that lets you swap any face in real time using a single source image. Built on [InsightFace](https://github.com/deepinsight/insightface) for face detection and ONNX Runtime for inference, it runs on CPU or GPU and works with your webcam feed, video files, and still images. You select one photo of a face, click a button, and the swap appears live — no per-frame manual editing required.
+
+## Key features
+
+Deep-Live-Cam version 2.1.5 (GitHub Edition) ships with the following capabilities, all operating in real time:
+
+- **Real-time webcam face swap** — swap your face on a live camera feed with sub-second latency. Pipe the output into OBS or any virtual camera for streaming.
+- **Image and video processing** — apply a face swap to a static image or an entire video file and save the result to disk.
+- **Face mapping** — assign different source faces to different subjects in the same frame simultaneously, useful for multi-person content.
+- **Mouth mask** — retain your own mouth and lip movements on top of the swapped face so speech looks natural.
+- **Face enhancer** — optional post-processing with GFPGANv1.4 (or GPEN-256/GPEN-512) to sharpen and restore swapped faces.
+- **Multi-face processing** — the `--many-faces` flag applies the default source face to every detected face in the frame at once.
+- **GPU acceleration** — supports CUDA (NVIDIA), DirectML (Windows AMD/Intel), CoreML (Apple Silicon and legacy), OpenVINO (Intel), and ROCM (AMD Linux). Falls back to CPU automatically.
+- **NSFW filtering** — a built-in content filter powered by opennsfw2 blocks processing of nudity, graphic content, and other sensitive material.
+- **Headless / CLI mode** — passing `-s`, `-t`, and `-o` arguments skips the GUI entirely so Deep-Live-Cam can run in scripts and pipelines.
+- **Frame interpolation** — temporal smoothing between frames reduces flickering during webcam or video processing.
+- **Live mirror and resizable preview** — flip the webcam feed horizontally or resize the preview window to fit your workflow.
+
+## Use cases
+
+<CardGroup cols={2}>
+  <Card title="Live streaming" icon="video" href="/usage/webcam-mode">
+    Stream with a swapped face over OBS or any virtual camera. Select a source image, click Live, and capture the preview window.
+  </Card>
+  <Card title="Watch movies with any face" icon="film" href="/usage/webcam-mode">
+    Point the webcam at your screen while a movie plays to replace every character's face in real time.
+  </Card>
+  <Card title="Memes and short clips" icon="images" href="/usage/image-video-mode">
+    Process a video clip or still image offline. Output is saved automatically next to the target file.
+  </Card>
+  <Card title="Live shows and performances" icon="star" href="/usage/webcam-mode">
+    Use Deep-Live-Cam as a live visual effect during performances, presentations, or interactive shows.
+  </Card>
+</CardGroup>
+
+## Hardware requirements overview
+
+Deep-Live-Cam runs on any machine with Python 3.11 and ffmpeg. CPU-only mode works out of the box but is slower. For smooth real-time performance a discrete GPU is strongly recommended.
+
+| Execution provider | Hardware | Notes |
+|---|---|---|
+| `cpu` | Any x86-64 or ARM CPU | Default fallback. Slower but always available. |
+| `cuda` | NVIDIA GPU | Requires CUDA Toolkit 12.8 and cuDNN v8.9.7. Best performance on most systems. |
+| `directml` | AMD or Intel GPU on Windows | No separate driver install beyond `onnxruntime-directml`. |
+| `coreml` | Apple M1/M2/M3 (Silicon) | Requires Python 3.11 and `onnxruntime-silicon`. |
+| `coreml` | Apple legacy (Intel Mac) | Uses `onnxruntime-coreml`. |
+| `openvino` | Intel CPU/GPU | Uses `onnxruntime-openvino`. |
+
+<Note>
+  The insightface models used by Deep-Live-Cam are licensed for **non-commercial research purposes only**. If you use a real person's face, you must obtain their consent and clearly label any output as a deepfake when sharing online.
+</Note>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Installation and requirements" icon="wrench" href="/installation/requirements">
+    Step-by-step instructions for setting up Python, ffmpeg, models, and GPU acceleration on Windows, Linux, and macOS.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get to a working face swap in five steps: clone, download models, create a venv, install dependencies, and run.
+  </Card>
+  <Card title="Webcam mode" icon="camera" href="/usage/webcam-mode">
+    How to use the Live button for real-time face swapping and how to connect the output to OBS or a virtual camera.
+  </Card>
+  <Card title="Image and video mode" icon="file-video" href="/usage/image-video-mode">
+    How to select a source face and target file, start processing, and find the output on disk.
+  </Card>
+</CardGroup>

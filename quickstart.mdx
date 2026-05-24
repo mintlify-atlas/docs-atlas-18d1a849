@@ -1,81 +1,194 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
-icon: 'rocket'
+title: "Get started with Deep-Live-Cam"
+description: "Install Deep-Live-Cam and perform your first real-time face swap in five steps. Covers prerequisites, model download, and launching the GUI."
 ---
 
-## Get started in three steps
-
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This guide walks you through cloning the repository, downloading the required model files, creating a virtual environment, installing dependencies, and running your first face swap. The entire process takes around ten minutes on a machine with a stable internet connection. CPU-only mode works without any GPU drivers, though a discrete GPU significantly improves real-time performance.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  Deep-Live-Cam requires **Python 3.11**. Newer versions such as 3.13 are not supported, and versions below 3.9 are rejected at startup. On macOS, always invoke Python as `python3.11` if multiple versions are installed.
 </Note>
+
+## Prerequisites
+
+Before you begin, make sure the following tools are installed and available on your `PATH`:
+
+- **Python 3.11** — [python.org/downloads](https://www.python.org/downloads/)
+- **pip** — bundled with Python 3.11
+- **git** — [git-scm.com](https://git-scm.com/)
+- **ffmpeg** — required for all video operations; Deep-Live-Cam will refuse to start without it
+
+<Tabs>
+  <Tab title="Windows">
+    Install ffmpeg with the one-liner from the README:
+
+    ```powershell
+    iex (irm ffmpeg.tc.ht)
+    ```
+
+    Also install [Visual Studio 2022 C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) — several native Python packages require them to compile.
+  </Tab>
+  <Tab title="macOS">
+    Install ffmpeg and the Python 3.11 tkinter binding via Homebrew:
+
+    ```bash
+    brew install ffmpeg python@3.11 python-tk@3.11
+    ```
+  </Tab>
+  <Tab title="Linux">
+    Install ffmpeg through your package manager, for example on Debian/Ubuntu:
+
+    ```bash
+    sudo apt update && sudo apt install ffmpeg
+    ```
+  </Tab>
+</Tabs>
+
+## Setup steps
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the Deep-Live-Cam repository and enter the project directory:
+
+    ```bash
+    git clone https://github.com/hacksider/Deep-Live-Cam.git
+    cd Deep-Live-Cam
+    ```
+  </Step>
+
+  <Step title="Download the models">
+    Deep-Live-Cam needs two ONNX model files. Download both from HuggingFace and place them in the `models/` folder inside the repository:
+
+    - [GFPGANv1.4.onnx](https://huggingface.co/hacksider/deep-live-cam/resolve/main/GFPGANv1.4.onnx) — face enhancement model
+    - [inswapper\_128\_fp16.onnx](https://huggingface.co/hacksider/deep-live-cam/resolve/main/inswapper_128_fp16.onnx) — face swap model
+
+    After downloading, your directory should look like:
+
+    ```
+    Deep-Live-Cam/
+    └── models/
+        ├── GFPGANv1.4.onnx
+        └── inswapper_128_fp16.onnx
+    ```
+
+    <Note>
+      All models are also listed at [huggingface.co/hacksider/deep-live-cam](https://huggingface.co/hacksider/deep-live-cam/tree/main) if you need to re-download or add extras later.
+    </Note>
+  </Step>
+
+  <Step title="Create a virtual environment">
+    A virtual environment prevents dependency conflicts with other Python projects. Create and activate one now:
+
+    <Tabs>
+      <Tab title="Windows">
+        ```powershell
+        python -m venv venv
+        venv\Scripts\activate
+        ```
+      </Tab>
+      <Tab title="macOS">
+        ```bash
+        python3.11 -m venv venv
+        source venv/bin/activate
+        ```
+      </Tab>
+      <Tab title="Linux">
+        ```bash
+        # Use the installed Python 3.11 explicitly
+        python3 -m venv venv
+        source venv/bin/activate
+        ```
+      </Tab>
+    </Tabs>
+
+    Your shell prompt should now show `(venv)` to confirm the environment is active.
+  </Step>
+
+  <Step title="Install dependencies">
+    With the virtual environment active, install all required packages from `requirements.txt`:
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+    Key packages installed include `insightface==0.7.3`, `onnxruntime`, `opencv-python==4.10.0.84`, `opennsfw2==0.10.2`, and `PySide6` for the GUI. The exact runtime variant of ONNX Runtime is selected automatically based on your platform:
+
+    - **Apple Silicon (arm64)**: `onnxruntime-silicon==1.16.3`
+    - **Windows / Linux**: `onnxruntime-gpu==1.23.2`
+
+    <Tip>
+      For NVIDIA GPU acceleration, install the CUDA-specific packages after the base requirements:
+
+      ```bash
+      pip install -U torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+      pip uninstall onnxruntime onnxruntime-gpu
+      pip install onnxruntime-gpu==1.21.0
+      ```
+
+      Then launch with `python run.py --execution-provider cuda`.
+    </Tip>
+  </Step>
+
+  <Step title="Run Deep-Live-Cam">
+    Start the application with:
+
+    ```bash
+    python run.py
+    ```
+
+    On macOS with multiple Python versions installed, use the explicit version:
+
+    ```bash
+    python3.11 run.py
+    ```
+
+    The GUI window will open. Deep-Live-Cam automatically selects the best available execution provider (CUDA > ROCM > CoreML > DirectML > CPU).
+
+    <Warning>
+      The first launch may download additional face analysis models (~300 MB). Keep your internet connection active until the GUI finishes loading.
+    </Warning>
+  </Step>
+</Steps>
+
+## Basic GUI usage
+
+Once the window is open, you have two modes:
+
+**Webcam mode (real-time)**
+
+1. Click **Select a face** and choose a source image containing the face you want to use.
+2. Select which camera to use from the camera dropdown.
+3. Click **Live**.
+4. Wait 10–30 seconds for the preview to appear.
+5. Use a screen capture tool such as OBS to capture the preview window for streaming or recording.
+
+**Image / video mode (offline)**
+
+1. Click **Select a face** and choose your source face image.
+2. Click **Select a target** and choose the image or video file you want to process.
+3. Click **Start**.
+4. The output file is saved in a directory named after the target file.
+
+<Note>
+  To change the source face during a live session, simply select a new image — the swap updates immediately without restarting.
+</Note>
+
+## CLI mode
+
+Passing `-s`, `-t`, and `-o` arguments bypasses the GUI entirely and runs in headless mode:
+
+```bash
+python run.py -s path/to/source.jpg -t path/to/target.mp4 -o path/to/output.mp4
+```
+
+Common flags:
+
+| Flag | Description |
+|---|---|
+| `--execution-provider cuda` | Use NVIDIA GPU |
+| `--many-faces` | Swap every detected face in the frame |
+| `--mouth-mask` | Preserve original mouth movements |
+| `--map-faces` | Use per-subject face mapping |
+| `--keep-fps` | Keep the original frame rate of the target video |
+| `--keep-audio` | Preserve original audio (default: true) |
+| `--frame-processor face_enhancer` | Add GFPGAN face enhancement to the pipeline |

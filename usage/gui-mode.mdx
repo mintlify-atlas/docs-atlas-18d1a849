@@ -1,0 +1,114 @@
+---
+title: "Using the Deep-Live-Cam GUI"
+description: "Navigate the Deep-Live-Cam graphical interface to load source faces, select targets, and control face swap settings including enhancers and live preview."
+---
+
+Deep-Live-Cam launches a PySide6 desktop application when you run `python run.py` without providing `-s` or `-t` arguments. The dark-themed window gives you point-and-click access to every processing option — no terminal flags required for most workflows. All toggle states are written to `switch_states.json` on disk so your preferences persist between sessions.
+
+## Launching the GUI
+
+```bash
+python run.py
+```
+
+On first run the models (~300 MB) are downloaded automatically. Subsequent launches go straight to the interface.
+
+<Tip>
+Pass `--execution-provider cuda` (NVIDIA), `--execution-provider coreml` (Apple Silicon), or `--execution-provider directml` (Windows/AMD) to select a GPU backend while still using the GUI.
+</Tip>
+
+## Window layout
+
+The main window is fixed at **640 × 820 pixels** (`ROOT_WIDTH = 640`, `ROOT_HEIGHT = 820`). It is divided into five vertical sections stacked from top to bottom:
+
+<Steps>
+  <Step title="Source and target image row">
+    Two 200 × 200 drop zones sit side by side. **Select a face** opens a file browser filtered to images (`*.png`, `*.jpg`, `*.jpeg`, `*.gif`, `*.bmp`). **Select a target** accepts images and videos (`*.mp4`, `*.mkv`). A **↔** swap button between the two zones exchanges the source and target paths when both are images. A **🔄** button fetches a random AI-generated face from thispersondoesnotexist.com.
+  </Step>
+  <Step title="Options card">
+    A grid of toggle switches and an enhancer dropdown. See the controls reference below.
+  </Step>
+  <Step title="Refinement sliders card">
+    Three sliders for transparency, sharpness, and mouth mask intensity.
+  </Step>
+  <Step title="Action buttons">
+    **Start** begins image/video processing. **Preview** opens a scrubable preview window. **Destroy** halts processing and exits the application.
+  </Step>
+  <Step title="Camera card and status bar">
+    A camera selector dropdown and **Live** button for webcam mode, followed by an italic status label that displays progress messages at the bottom of the window.
+  </Step>
+</Steps>
+
+## Options card controls
+
+<CardGroup cols={2}>
+  <Card title="Keep fps" icon="film">
+    When enabled, the output video preserves the original frame rate detected by `ffprobe`. When disabled, the output defaults to 30 fps.
+  </Card>
+  <Card title="Keep audio" icon="volume-2">
+    Copies the original audio track from the source video into the output file using `ffmpeg`. Enabled by default.
+  </Card>
+  <Card title="Keep frames" icon="images">
+    Retains the temporary PNG frame files on disk after processing. Useful for debugging or post-processing individual frames.
+  </Card>
+  <Card title="Many faces" icon="users">
+    Swaps every detected face in each frame rather than only the primary (leftmost) face. Uses the same source image for all targets.
+  </Card>
+  <Card title="Map faces" icon="map">
+    Opens the Source × Target Mapper dialog so you can assign a different source face to each unique target face. Requires detection to run first.
+  </Card>
+  <Card title="Show FPS" icon="gauge">
+    Overlays a real-time frames-per-second counter on the live preview window, rendered with `cv2.putText` in green at position (10, 30).
+  </Card>
+  <Card title="Poisson Blend" icon="blend">
+    Applies Poisson blending to the face edges for smoother integration with the surrounding skin tone.
+  </Card>
+  <Card title="Fix Blueish Cam" icon="sliders">
+    Corrects the blue or green color cast produced by some webcam sensors.
+  </Card>
+</CardGroup>
+
+### Face enhancer dropdown
+
+The **Face Enhancer** dropdown lets you choose a super-resolution post-processing model to sharpen the swapped face:
+
+| Selection | Model key |
+|---|---|
+| None | No enhancement |
+| GFPGAN | `face_enhancer` (GFPGANv1.4) |
+| GPEN-512 | `face_enhancer_gpen512` |
+| GPEN-256 | `face_enhancer_gpen256` |
+
+Only one enhancer is active at a time. Changing the selection takes effect on the next processed frame.
+
+## Refinement sliders
+
+The **Refinement** card contains three horizontal sliders:
+
+| Slider | Range | Default | Effect |
+|---|---|---|---|
+| Transparency | 0.0 – 1.0 | 1.0 | Blends between the original face (0%) and the fully swapped face (100%). Setting to 0 disables face swapping entirely. |
+| Sharpness | 0.0 – 5.0 | 0.0 | Sharpens the enhanced face output. Only meaningful when a face enhancer is active. |
+| Mouth Mask | 0 – 100 | 0 | Exposes the original mouth region on top of the swap. 0 = fully swapped mouth; 100 = original mouth to chin. Starts disabled on every launch regardless of saved state. |
+
+## Preview window
+
+Clicking **Preview** opens a resizable overlay that renders a single processed frame. The preview window scales output to fit within **1200 × 700 pixels** (`PREVIEW_MAX_WIDTH = 1200`, `PREVIEW_MAX_HEIGHT = 700`). For video targets a scrub slider lets you jump to any frame without running the full pipeline.
+
+## Language selector
+
+The UI language is set at launch with the `-l` / `--lang` flag. For example, to launch in French:
+
+```bash
+python run.py --lang fr
+```
+
+The `LanguageManager` class in `modules/gettext.py` translates all labels and tooltips at startup. Changing language requires a restart.
+
+## Status bar
+
+The italic label at the bottom of the window shows live progress messages — such as `Processing...`, `Detecting fps...`, or `Processing to image succeed!` — emitted by `ui.update_status()`. The function is thread-safe and routes messages through a Qt signal when called from a background thread.
+
+<Note>
+All toggle states (keep fps, keep audio, many faces, etc.) are saved to `switch_states.json` in the working directory after each change. Mouth mask is always reset to disabled on launch even if a non-zero value was saved.
+</Note>

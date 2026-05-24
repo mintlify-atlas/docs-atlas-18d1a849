@@ -1,0 +1,123 @@
+---
+title: "Live webcam face swap with Deep-Live-Cam"
+description: "Stream real-time face swaps via webcam using Deep-Live-Cam. Select a source face, choose your camera, and capture the live preview with OBS or screen tools."
+---
+
+Live mode streams a face-swapped video feed from your webcam in real time. Deep-Live-Cam reads frames from the camera, runs face detection and swapping on each frame in a background thread, and displays the processed output in a floating preview window. You can then capture that window with OBS or any screen-capture tool to use the feed as a virtual camera.
+
+## Prerequisites
+
+Before starting a live session you need:
+
+- A source face image (`.png`, `.jpg`, `.jpeg`, `.gif`, or `.bmp`).
+- A connected webcam recognized by your operating system.
+- Deep-Live-Cam installed with all models downloaded to the `models/` folder.
+- ffmpeg installed and on your `PATH` (required for video pipeline; live mode also uses it internally).
+
+<Info>
+On Windows, cameras are enumerated via DirectShow (`pygrabber`). On macOS, indices 0 and 1 are exposed. On Linux, Deep-Live-Cam probes `/dev/video0` through `/dev/video9` and lists every device that opens successfully.
+</Info>
+
+## Starting a live session
+
+<Steps>
+  <Step title="Launch the application">
+    ```bash
+    python run.py
+    ```
+    To use GPU acceleration, append your execution provider:
+    ```bash
+    python run.py --execution-provider cuda
+    ```
+  </Step>
+  <Step title="Select a source face">
+    Click **Select a face** and choose the image whose face you want to project onto the webcam feed. A 200 × 200 thumbnail appears in the source drop zone.
+  </Step>
+  <Step title="Choose your camera">
+    In the **Camera** card at the bottom of the main window, pick your webcam from the dropdown. If no cameras are detected the dropdown is disabled.
+  </Step>
+  <Step title="Click Live">
+    Click the **Live** button. Deep-Live-Cam loads the face analyser and face swapper models, then opens the **Live Preview** window.
+  </Step>
+  <Step title="Wait for the preview to appear">
+    The preview appears after a 10–30 second warm-up while the ONNX models initialise. Once the window shows a live feed, face swapping is running.
+  </Step>
+</Steps>
+
+<Warning>
+Do not close the main window during warm-up. Closing it calls `destroy()`, which terminates the application. Wait until the Live Preview window appears.
+</Warning>
+
+## Using OBS to capture the output
+
+OBS Studio can capture the Live Preview window and publish it as a virtual camera or stream source:
+
+<Steps>
+  <Step title="Add a window capture source">
+    In OBS, click **+** in the Sources panel and choose **Window Capture**. Select the **Live Preview** window from Deep-Live-Cam.
+  </Step>
+  <Step title="Crop to the feed">
+    Right-click the source and choose **Filters → Crop/Pad** to remove any window chrome around the video feed.
+  </Step>
+  <Step title="Start Virtual Camera">
+    Click **Start Virtual Camera** in OBS. Other applications (video conferencing tools, streaming software) will see the swapped feed as a regular webcam input.
+  </Step>
+</Steps>
+
+<Tip>
+For the cleanest capture, enable **Live Mirror** (see below) so the feed matches the front-facing orientation other participants expect.
+</Tip>
+
+## Live mirror
+
+The `--live-mirror` flag (or the **Live Mirror** toggle in the GUI if available) flips the preview horizontally:
+
+```bash
+python run.py --live-mirror
+```
+
+This mirrors the feed as a front-facing camera would — your left appears on the left side of the output, matching the natural expectation for video calls. Internally the processing worker calls `gpu_flip(temp_frame, 1)` on every frame before passing it through the face swap pipeline.
+
+## Live resizable window
+
+By default the Live Preview window has a fixed size. Pass `--live-resizable` to allow dragging the window edges:
+
+```bash
+python run.py --live-resizable
+```
+
+Resizing does not change the capture resolution — it only scales the displayed output. The `VideoCapturer` requests **960 × 540 at 60 fps** from the camera regardless of the preview window size.
+
+## Changing the source face mid-session
+
+You can hot-swap the source face without restarting. With the Live Preview window open, click **Select a face** in the main window and choose a new image. The processing worker detects the path change on the next frame (`source_path != last_source_path`) and reloads the source face immediately.
+
+## Performance tips
+
+<CardGroup cols={2}>
+  <Card title="Use GPU acceleration" icon="microchip">
+    Pass `--execution-provider cuda` (NVIDIA), `--execution-provider coreml` (Apple Silicon), or `--execution-provider directml` (Windows/AMD) to offload inference to the GPU. CPU-only mode is substantially slower.
+  </Card>
+  <Card title="Skip the face enhancer" icon="zap">
+    Set the **Face Enhancer** dropdown to **None** to avoid the second ONNX model pass on every frame. Enhancers add significant latency per frame.
+  </Card>
+  <Card title="Disable Show FPS in release" icon="gauge">
+    The **Show FPS** overlay calls `cv2.putText` on every frame, which is cheap but adds a small constant cost. Disable it when sharing your feed publicly.
+  </Card>
+  <Card title="Close other GPU workloads" icon="monitor">
+    The face swap and detection models share GPU memory with the rest of your system. Close GPU-heavy applications to reduce VRAM contention and improve frame rates.
+  </Card>
+</CardGroup>
+
+## Camera capture internals
+
+The `VideoCapturer` class in `modules/video_capture.py` manages camera access. On Windows it opens with DirectShow (`CAP_DSHOW`) using MJPG codec negotiated at construction time to avoid USB bandwidth limitations from uncompressed YUYV. On Linux and macOS it uses the default OpenCV backend. After opening, the class measures the actual FPS empirically by timing a 30-frame burst rather than trusting the value reported by `CAP_PROP_FPS`, which can be inaccurate on DirectShow.
+
+The live pipeline runs on two background threads:
+
+1. **`_CaptureWorker`** — reads raw frames from the camera into a bounded queue (max size 2). Drops frames on overflow to prevent memory build-up.
+2. **`_ProcessingWorker`** — pulls raw frames, runs face detection and swapping, pushes processed frames to a second queue. The UI timer polls this queue at roughly twice the camera frame rate.
+
+<Note>
+The 10–30 second warm-up on first launch is caused by ONNX Runtime loading and optimising the model graphs. Subsequent sessions in the same process start faster because the models remain loaded.
+</Note>

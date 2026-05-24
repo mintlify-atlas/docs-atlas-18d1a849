@@ -1,0 +1,126 @@
+---
+title: "Frame processors: swapper and enhancers"
+description: "Configure Deep-Live-Cam's frame processing pipeline with face_swapper, GFPGAN enhancer, and GPEN variants. Learn when to combine processors for best results."
+---
+
+Deep-Live-Cam processes every frame through an ordered pipeline of modules called frame processors. Each processor is a Python module inside `modules/processors/frame/` that exposes a standard interface: `pre_check`, `pre_start`, `process_frame`, `process_image`, and `process_video`. Processors are loaded in the order they appear on the command line (or in the GUI toggles), and the output of one becomes the input of the next.
+
+## Available processors
+
+<CardGroup cols={2}>
+  <Card title="face_swapper" icon="repeat">
+    Core identity transfer. Replaces detected faces using the `inswapper_128_fp16.onnx` model from InsightFace. This is the only processor active by default.
+  </Card>
+  <Card title="face_enhancer" icon="sparkles">
+    Upscales and restores facial detail using `GFPGANv1.4.onnx`. Adds clarity and removes compression artifacts introduced by the swap.
+  </Card>
+  <Card title="face_enhancer_gpen256" icon="image">
+    GPEN-based enhancement at 256 px internal resolution. Faster than GFPGAN; suitable for lower-end hardware or real-time use.
+  </Card>
+  <Card title="face_enhancer_gpen512" icon="image">
+    GPEN-based enhancement at 512 px internal resolution. Higher quality than the 256 variant at the cost of additional compute.
+  </Card>
+</CardGroup>
+
+## face_swapper
+
+`face_swapper` is the foundation of the pipeline. It uses InsightFace's `inswapper_128_fp16.onnx` to perform identity transfer: the face embedding from your source image is projected into the target face region of each frame.
+
+Key behaviors:
+
+- **Single-face mode** (default): only the most prominent face in the frame is swapped.
+- **Many-faces mode** (`--many-faces`): every detected face is swapped with the same source.
+- **Map-faces mode** (`--map-faces`): specific source embeddings are matched to specific target faces using centroid-cluster analysis.
+
+The swapper exposes two blend controls available through the GUI and `modules.globals`:
+
+| Control | Global | Range | Effect |
+|---------|--------|-------|--------|
+| Opacity | `modules.globals.opacity` | `0.0`–`1.0` | Blends the swapped face with the original. `1.0` is a full replacement; `0.0` leaves the original untouched. |
+| Sharpness | `modules.globals.sharpness` | `0.0`–`5.0` | Applies GPU-accelerated sharpening to the pasted face region after blending. |
+
+<Note>
+Opacity and sharpness are GUI-only controls in the current release. They are stored in `modules.globals` and applied at runtime but cannot be set via CLI flags.
+</Note>
+
+## face_enhancer (GFPGAN)
+
+`face_enhancer` runs `GFPGANv1.4.onnx` on each face crop after swapping. GFPGAN is a generative prior designed to restore facial detail lost during compression or low-resolution capture. It is the highest-quality enhancement option but is also the most computationally expensive of the three enhancer variants.
+
+**When to use it:** post-processing recorded video where quality matters more than speed, or when the source image is low resolution and the swap introduces visible degradation.
+
+## face_enhancer_gpen256 and face_enhancer_gpen512
+
+GPEN (GAN Prior Embedded Network) operates at a fixed internal resolution—256 px or 512 px—before upscaling back to the frame resolution. The 256-px variant runs approximately 2× faster than GFPGAN and is more suited to near-real-time scenarios. The 512-px variant sits between the two in both quality and speed.
+
+| Processor | Internal resolution | Relative speed | Best use |
+|-----------|-------------------|----------------|----------|
+| `face_enhancer` | ~1024 px (GFPGAN) | Slowest | High-quality offline video |
+| `face_enhancer_gpen512` | 512 px | Medium | Balanced quality / speed |
+| `face_enhancer_gpen256` | 256 px | Fastest | Near-real-time on mid-range GPU |
+
+## Chaining processors
+
+Pass multiple processor names to `--frame-processor` to build a pipeline. Processors run in the order specified.
+
+```bash
+# Swap then enhance (recommended combination)
+python run.py -s source.jpg -t video.mp4 \
+  --frame-processor face_swapper face_enhancer
+
+# Swap then apply GPEN 512 for a faster enhancement pass
+python run.py -s source.jpg -t video.mp4 \
+  --frame-processor face_swapper face_enhancer_gpen512
+```
+
+<Warning>
+Running two enhancers in sequence (e.g., `face_enhancer face_enhancer_gpen512`) is not recommended. Each pass re-processes the entire face crop, doubling GPU time without meaningful quality gain and risking over-smoothing.
+</Warning>
+
+The pipeline is enforced by `get_frame_processors_modules` in `modules/processors/frame/core.py`, which validates every name against the `ALLOWED_PROCESSORS` set before importing the module.
+
+## Mouth mask
+
+`--mouth-mask` is a special compositing mode that runs alongside any processor combination. After the full frame-processor pipeline completes, the original mouth region is feathered back over the processed result. This preserves natural lip movement and avoids the "locked mouth" artifact common in face-swap outputs.
+
+Mouth mask tuning parameters (accessible via `modules.globals`):
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `mask_feather_ratio` | `12` | Controls feather edge width. Higher values produce a narrower blend boundary. |
+| `mask_down_size` | `0.1` | Expansion factor for the lower-lip region of the mask. |
+| `mask_size` | `1.0` | Expansion factor for the upper-lip region. |
+| `mouth_mask_size` | `0.0` | Overall mouth mask scale (`0` = off, `100` = mouth-to-chin coverage). |
+
+## Performance trade-offs
+
+<Tabs>
+  <Tab title="Real-time / live mode">
+    Use `face_swapper` alone. Adding any enhancer introduces a second ONNX inference pass per face crop per frame, which cuts effective throughput roughly in half on a mid-range GPU.
+
+    ```bash
+    python run.py --frame-processor face_swapper \
+      --execution-provider cuda \
+      --execution-threads 2
+    ```
+  </Tab>
+  <Tab title="Offline video (quality focus)">
+    Chain `face_swapper` with `face_enhancer` for maximum quality. Use `--keep-fps` to preserve the source frame rate and `--video-quality 18` (the default CRF) for a good quality/size balance.
+
+    ```bash
+    python run.py -s source.jpg -t input.mp4 \
+      --frame-processor face_swapper face_enhancer \
+      --keep-fps \
+      --execution-provider cuda
+    ```
+  </Tab>
+  <Tab title="Balanced (GPEN)">
+    Use `face_enhancer_gpen256` for a speed/quality compromise that works well on GPUs with 6–8 GB VRAM.
+
+    ```bash
+    python run.py -s source.jpg -t input.mp4 \
+      --frame-processor face_swapper face_enhancer_gpen256 \
+      --execution-provider cuda
+    ```
+  </Tab>
+</Tabs>

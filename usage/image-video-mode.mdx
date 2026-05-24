@@ -1,0 +1,176 @@
+---
+title: "Process images and videos with face swap"
+description: "Use Deep-Live-Cam to swap faces in photo and video files. Covers supported formats, output settings, audio preservation, and headless CLI processing."
+---
+
+Image and video mode processes a static file — a photo or a pre-recorded clip — and writes the result to disk. Unlike live mode it is not real-time: Deep-Live-Cam reads every frame, applies the face swap pipeline, then re-encodes the output with ffmpeg. This mode supports both an interactive GUI workflow and a fully headless CLI pipeline suitable for batch jobs or automation.
+
+## Supported formats
+
+```
+Images:  .png  .jpg  .jpeg  .gif  .bmp
+Videos:  .mp4  .mkv
+```
+
+Format detection uses Python's `mimetypes` module. Files with a `image/*` MIME type go through the image pipeline; files with `video/*` go through the video pipeline.
+
+## GUI workflow
+
+<Steps>
+  <Step title="Launch the application">
+    ```bash
+    python run.py
+    ```
+  </Step>
+  <Step title="Select a source face">
+    Click **Select a face** and choose the image containing the face you want to use as the swap source. A 200 × 200 thumbnail appears in the source drop zone.
+  </Step>
+  <Step title="Select a target">
+    Click **Select a target** and choose the image or video you want to process. For videos, the first frame is displayed as a thumbnail.
+  </Step>
+  <Step title="Configure options">
+    Adjust toggles and sliders in the **Options** and **Refinement** cards before starting. Key options for image/video mode are described below.
+  </Step>
+  <Step title="Click Start">
+    Click **Start**. A save dialog prompts you for the output file path. Processing begins immediately after you confirm.
+  </Step>
+  <Step title="Wait for completion">
+    The status bar shows progress messages such as `Processing video in-memory at 29.97 fps...` and `Video processing succeeded! Total time: 42.31s`. The output file is written to the path you selected.
+  </Step>
+</Steps>
+
+## Headless CLI mode
+
+Providing `-s` and `-t` (or `-o`) arguments activates headless mode — no GUI is shown and processing starts immediately:
+
+```bash
+python run.py -s source.jpg -t target.mp4 -o output.mp4
+```
+
+```bash
+python run.py \
+  -s source.jpg \
+  -t target.mp4 \
+  -o output.mp4 \
+  --keep-fps \
+  --keep-audio \
+  --video-encoder libx264 \
+  --video-quality 18
+```
+
+<Info>
+The README notes that CLI mode is "unmaintained". The `-s`/`-t`/`-o` flags work, but some newer GUI-only features (face mapper, per-face opacity) are not accessible from the CLI.
+</Info>
+
+## Video processing pipelines
+
+Deep-Live-Cam chooses between two internal video pipelines depending on the active options:
+
+<Tabs>
+  <Tab title="In-memory pipeline (default)">
+    When `--map-faces` is **not** enabled, Deep-Live-Cam uses `process_video_in_memory()`. Frames are read directly from an ffmpeg pipe, processed in RAM, and encoded to the output file without writing any per-frame PNGs to disk. This is significantly faster than the disk-based path because it eliminates all intermediate I/O.
+
+    ```
+    ffmpeg (decode) → frame queue → face swap → ffmpeg (encode)
+    ```
+  </Tab>
+  <Tab title="Disk-based pipeline (map_faces)">
+    When `--map-faces` is enabled (or if the in-memory pipeline fails), Deep-Live-Cam falls back to a disk-based path. It calls `extract_frames()` to write every frame as a numbered PNG (`0001.png`, `0002.png`, …) into a temporary directory, processes each file, then calls `create_video()` to re-encode the sequence. The temporary directory is cleaned up unless `--keep-frames` is set.
+
+    ```
+    ffmpeg extract → *.png files → face swap → ffmpeg re-encode → cleanup
+    ```
+  </Tab>
+</Tabs>
+
+## Audio handling
+
+| Flag | Default | Behaviour |
+|---|---|---|
+| `--keep-audio` | `True` | Muxes the original audio track from the source video into the output with `ffmpeg -map 1:a:0`. |
+| (no flag) | — | If `--keep-audio` is omitted, only the video stream is written. |
+
+<Warning>
+When `--keep-fps` is not set the output defaults to 30 fps. The status bar shows `Restoring audio might cause issues as fps are not kept...` in this case because the audio duration will be misaligned with the re-timed video.
+</Warning>
+
+## FPS options
+
+```bash
+# Preserve original frame rate (detected via ffprobe)
+python run.py -s source.jpg -t target.mp4 -o output.mp4 --keep-fps
+
+# Force 30 fps output (default when flag is omitted)
+python run.py -s source.jpg -t target.mp4 -o output.mp4
+```
+
+## Video encoder and quality
+
+```bash
+# H.264 at CRF 18 (default — good balance of quality and file size)
+python run.py -s source.jpg -t target.mp4 -o output.mp4 --video-encoder libx264 --video-quality 18
+
+# H.265 for smaller files at the same perceptual quality
+python run.py -s source.jpg -t target.mp4 -o output.mp4 --video-encoder libx265 --video-quality 18
+
+# VP9 for browser-compatible output
+python run.py -s source.jpg -t target.mp4 -o output.mp4 --video-encoder libvpx-vp9 --video-quality 18
+```
+
+| Encoder | `--video-encoder` value | Notes |
+|---|---|---|
+| H.264 | `libx264` | Default. Hardware-accelerated to `h264_nvenc` (NVIDIA) or `h264_amf` (AMD) when available. |
+| H.265 / HEVC | `libx265` | Smaller files; hardware-accelerated to `hevc_nvenc` or `hevc_amf` when available. |
+| VP9 | `libvpx-vp9` | Browser-native; always software-encoded. |
+
+`--video-quality` accepts an integer from 0 to 51 (default 18). Lower values produce higher quality and larger files. The value maps to CRF for CPU encoders and to the `-cq` parameter for NVIDIA NVENC.
+
+<Tip>
+On systems with an NVIDIA GPU (CUDA provider), Deep-Live-Cam automatically switches `libx264` to `h264_nvenc` and `libx265` to `hevc_nvenc`, using VBR rate control (`-preset p4 -tune hq -rc vbr`). If hardware encoding fails, it falls back to software `libx264` transparently.
+</Tip>
+
+## Output path behaviour
+
+When `-o` points to a **directory**, the output filename is derived automatically:
+
+```
+<source_name>-<target_name><target_extension>
+```
+
+For example, running with `-s alice.jpg -t scene.mp4 -o /output/` produces `/output/alice-scene.mp4`.
+
+When `-o` specifies a **file path**, that exact path is used.
+
+## Image processing
+
+For image targets, Deep-Live-Cam copies the target to the output path first, then runs each frame processor in-place:
+
+```python
+shutil.copy2(modules.globals.target_path, modules.globals.output_path)
+for frame_processor in get_frame_processors_modules(modules.globals.frame_processors):
+    frame_processor.process_image(source_path, output_path, output_path)
+```
+
+Processing is single-pass and typically completes in under a second.
+
+## NSFW filter
+
+Pass `--nsfw-filter` to skip processing any target that is detected as containing inappropriate content:
+
+```bash
+python run.py -s source.jpg -t target.mp4 -o output.mp4 --nsfw-filter
+```
+
+When a target is flagged, the status bar shows `Processing ignored!` and no output file is written.
+
+## Keeping temporary frames
+
+```bash
+python run.py -s source.jpg -t target.mp4 -o output.mp4 --keep-frames
+```
+
+With `--keep-frames`, the extracted PNG files in the temporary directory are not deleted after encoding. The temp directory path follows the pattern:
+
+```
+<target_directory>/temp/<target_name>/
+```

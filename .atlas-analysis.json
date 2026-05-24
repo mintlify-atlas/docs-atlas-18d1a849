@@ -1,0 +1,89 @@
+{
+  "projectType": "ai-ml",
+  "projectName": "Deep-Live-Cam",
+  "projectDescription": "Real-time AI-powered face swap and video deepfake tool that lets you swap any face with a single source image via webcam, video, or image processing.",
+  "theme": "almond",
+  "primaryColor": "#040404",
+  "lightColor": "#f47834",
+  "darkColor": "#5294d0",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Installation",
+            "pages": [
+              "installation/requirements",
+              "installation/gpu-acceleration",
+              "installation/models"
+            ]
+          },
+          {
+            "group": "Using Deep-Live-Cam",
+            "pages": [
+              "usage/gui-mode",
+              "usage/webcam-mode",
+              "usage/image-video-mode",
+              "usage/face-mapping"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/cli-arguments",
+              "configuration/frame-processors",
+              "configuration/performance"
+            ]
+          },
+          {
+            "group": "Troubleshooting & Contributing",
+            "pages": [
+              "troubleshooting",
+              "contributing",
+              "ethics-and-legal"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Real-time face swap via webcam with single source image",
+    "Image and video deepfake processing",
+    "Face mapping for multi-subject swaps",
+    "Mouth mask feature to retain natural mouth movement",
+    "GPU acceleration via CUDA, CoreML, DirectML, and OpenVINO",
+    "NSFW content filtering",
+    "Multiple face enhancer options (GFPGAN, GPEN)",
+    "Headless/CLI mode for batch processing",
+    "Multi-language UI support",
+    "Frame interpolation for smoother output"
+  ],
+  "publicApiSurface": [
+    "python run.py",
+    "python run.py -s SOURCE -t TARGET -o OUTPUT",
+    "--execution-provider {cpu,cuda,rocm,coreml,directml,openvino}",
+    "--frame-processor {face_swapper,face_enhancer,face_enhancer_gpen256,face_enhancer_gpen512}",
+    "--many-faces",
+    "--map-faces",
+    "--mouth-mask",
+    "--keep-fps",
+    "--keep-audio",
+    "--live-mirror",
+    "--live-resizable",
+    "--video-encoder {libx264,libx265,libvpx-vp9}",
+    "--video-quality [0-51]",
+    "--max-memory MAX_MEMORY",
+    "--execution-threads EXECUTION_THREADS",
+    "--nsfw-filter",
+    "--lang LANG"
+  ]
+}

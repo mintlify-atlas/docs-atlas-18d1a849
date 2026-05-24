@@ -1,0 +1,267 @@
+---
+title: "Troubleshooting Deep-Live-Cam installation and errors"
+description: "Fix common Deep-Live-Cam errors including ffmpeg not found, Python version issues, missing models, onnxruntime GPU errors, and macOS-specific install conflicts."
+---
+
+Most Deep-Live-Cam installation problems fall into a small number of categories: a missing system dependency (ffmpeg, Python 3.11), the wrong onnxruntime variant for your hardware, a missing or misplaced model file, or a macOS-specific package conflict. Work through the accordion below that matches your error message. If you are on macOS, read the macOS-specific entries as well — several issues only affect Apple Silicon setups.
+
+<AccordionGroup>
+  <Accordion title="ffmpeg not found">
+    Deep-Live-Cam calls ffmpeg directly for all video operations and will refuse to start if it cannot find the binary on your `PATH`. Confirm whether ffmpeg is installed by running:
+
+    ```bash
+    ffmpeg -version
+    ```
+
+    If the command is not found, install ffmpeg for your platform:
+
+    <Tabs>
+      <Tab title="Windows">
+        Run the one-liner from the README in a PowerShell terminal:
+
+        ```powershell
+        iex (irm ffmpeg.tc.ht)
+        ```
+
+        After installation, open a new terminal and run `ffmpeg -version` to confirm it is on your `PATH`.
+      </Tab>
+      <Tab title="macOS">
+        ```bash
+        brew install ffmpeg
+        ```
+      </Tab>
+      <Tab title="Linux (Debian/Ubuntu)">
+        ```bash
+        sudo apt update && sudo apt install ffmpeg
+        ```
+      </Tab>
+    </Tabs>
+
+    After installing, open a **new** terminal session so the updated `PATH` takes effect, then retry `ffmpeg -version`.
+  </Accordion>
+
+  <Accordion title="Python version errors">
+    Deep-Live-Cam requires **Python 3.11**. Versions below 3.9 are rejected at startup, and newer versions such as 3.13 are not compatible with some compiled dependencies.
+
+    Check your active Python version:
+
+    ```bash
+    python --version
+    ```
+
+    If the output is not `Python 3.11.x`, install Python 3.11 from [python.org/downloads](https://www.python.org/downloads/) or via your package manager.
+
+    On macOS, if multiple Python versions are installed via Homebrew, call the version explicitly:
+
+    ```bash
+    python3.11 --version
+    ```
+
+    Always create your virtual environment with `python3.11` on macOS to avoid picking up the wrong interpreter:
+
+    ```bash
+    python3.11 -m venv venv
+    source venv/bin/activate
+    ```
+  </Accordion>
+
+  <Accordion title="_tkinter missing (macOS)">
+    If you see an error like `ModuleNotFoundError: No module named '_tkinter'` when launching the GUI on macOS, the Homebrew tkinter binding for Python 3.11 is missing or broken.
+
+    Reinstall it with:
+
+    ```bash
+    brew reinstall python-tk@3.11
+    ```
+
+    Then recreate your virtual environment to pick up the updated library:
+
+    ```bash
+    deactivate
+    rm -rf venv
+    python3.11 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+    ```
+  </Accordion>
+
+  <Accordion title="Model loading errors">
+    Deep-Live-Cam requires two ONNX model files to be present in the `models/` folder inside the repository before the application starts:
+
+    - `GFPGANv1.4.onnx`
+    - `inswapper_128_fp16.onnx`
+
+    Verify the files are in place:
+
+    ```bash
+    ls models/
+    ```
+
+    Expected output:
+
+    ```
+    GFPGANv1.4.onnx
+    inswapper_128_fp16.onnx
+    ```
+
+    If either file is missing, download it from the HuggingFace repository and place it in the `models/` folder:
+
+    - [GFPGANv1.4.onnx](https://huggingface.co/hacksider/deep-live-cam/resolve/main/GFPGANv1.4.onnx)
+    - [inswapper\_128\_fp16.onnx](https://huggingface.co/hacksider/deep-live-cam/resolve/main/inswapper_128_fp16.onnx)
+
+    <Note>
+      All available models are listed at [huggingface.co/hacksider/deep-live-cam](https://huggingface.co/hacksider/deep-live-cam/tree/main).
+    </Note>
+  </Accordion>
+
+  <Accordion title="onnxruntime GPU provider not found">
+    Each hardware acceleration backend requires a specific `onnxruntime` variant. Installing the wrong variant (or leaving a conflicting one installed) causes the GPU provider to be silently skipped or to raise an import error.
+
+    Uninstall any existing onnxruntime packages first, then install the correct one for your hardware:
+
+    <Tabs>
+      <Tab title="NVIDIA (CUDA)">
+        ```bash
+        pip uninstall onnxruntime onnxruntime-gpu
+        pip install onnxruntime-gpu==1.21.0
+        ```
+      </Tab>
+      <Tab title="Apple Silicon (CoreML)">
+        ```bash
+        pip uninstall onnxruntime onnxruntime-silicon
+        pip install onnxruntime-silicon==1.13.1
+        ```
+      </Tab>
+      <Tab title="Apple Legacy (CoreML)">
+        ```bash
+        pip uninstall onnxruntime onnxruntime-coreml
+        pip install onnxruntime-coreml==1.21.0
+        ```
+      </Tab>
+      <Tab title="Windows AMD/Intel (DirectML)">
+        ```bash
+        pip uninstall onnxruntime onnxruntime-directml
+        pip install onnxruntime-directml==1.21.0
+        ```
+      </Tab>
+      <Tab title="Intel (OpenVINO)">
+        ```bash
+        pip uninstall onnxruntime onnxruntime-openvino
+        pip install onnxruntime-openvino==1.21.0
+        ```
+      </Tab>
+    </Tabs>
+
+    After installing the correct variant, launch with the matching `--execution-provider` flag, for example `--execution-provider cuda`.
+  </Accordion>
+
+  <Accordion title="CUDA errors on NVIDIA GPU">
+    CUDA errors at runtime typically mean one of three things: CUDA Toolkit is not installed, the version does not match what onnxruntime-gpu expects, or the cuDNN binaries are not on your `PATH`.
+
+    Deep-Live-Cam requires:
+
+    - [CUDA Toolkit 12.8.0](https://developer.nvidia.com/cuda-12-8-0-download-archive)
+    - [cuDNN v8.9.7 for CUDA 12.x](https://developer.nvidia.com/rdp/cudnn-archive)
+
+    After installing cuDNN, add its `bin` directory to your system `PATH`. On Windows this is typically `C:\Program Files\NVIDIA\CUDNN\v8.9\bin`. On Linux, add the directory to `LD_LIBRARY_PATH`:
+
+    ```bash
+    export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+    ```
+
+    Then install the CUDA-compatible PyTorch and onnxruntime-gpu builds:
+
+    ```bash
+    pip install -U torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+    pip uninstall onnxruntime onnxruntime-gpu
+    pip install onnxruntime-gpu==1.21.0
+    ```
+
+    Launch with:
+
+    ```bash
+    python run.py --execution-provider cuda
+    ```
+  </Accordion>
+
+  <Accordion title="Low FPS or slow real-time performance">
+    If the live face swap runs below acceptable frame rates, try the following adjustments in order:
+
+    1. **Switch to a GPU execution provider.** CPU-only mode is significantly slower. Launch with `--execution-provider cuda` (NVIDIA), `--execution-provider coreml` (Apple), or `--execution-provider directml` (Windows AMD/Intel).
+
+    2. **Reduce execution threads.** Too many threads can cause contention. Try a lower value:
+
+       ```bash
+       python run.py --execution-provider cuda --execution-threads 4
+       ```
+
+    3. **Disable the face enhancer.** GFPGAN post-processing adds substantial per-frame cost. Uncheck the face enhancer in the GUI, or omit `face_enhancer` from the `--frame-processor` argument in CLI mode.
+
+    4. **Limit max memory.** If the process is paging due to insufficient RAM, cap its usage:
+
+       ```bash
+       python run.py --max-memory 8
+       ```
+
+    <Tip>
+      For GPU execution on NVIDIA, verify that `onnxruntime-gpu==1.21.0` is installed and that CUDA Toolkit 12.8.0 plus cuDNN v8.9.7 are present — missing drivers cause silent fallback to CPU.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="gfpgan / basicsr installation conflict (macOS)">
+    On macOS, `pip install -r requirements.txt` can leave `gfpgan` and `basicsr` in a broken state due to conflicting build metadata. If the face enhancer crashes or fails to load, reinstall both packages directly from their GitHub repositories.
+
+    First, tear down and recreate your virtual environment:
+
+    ```bash
+    deactivate
+    rm -rf venv
+    python3.11 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+    ```
+
+    Then apply the fix:
+
+    ```bash
+    pip install git+https://github.com/xinntao/BasicSR.git@master
+    pip uninstall gfpgan -y
+    pip install git+https://github.com/TencentARC/GFPGAN.git@master
+    ```
+
+    Relaunch Deep-Live-Cam and enable the face enhancer to confirm it loads without error.
+  </Accordion>
+
+  <Accordion title="Python version conflicts on macOS">
+    Having multiple Python versions installed via Homebrew can cause the wrong interpreter to be selected when creating virtual environments or running scripts. Check which versions are installed:
+
+    ```bash
+    brew list | grep python
+    ```
+
+    If you see versions other than 3.11 (such as 3.13), consider uninstalling them to eliminate ambiguity:
+
+    ```bash
+    brew uninstall --ignore-dependencies python@3.13
+    brew cleanup
+    ```
+
+    Always create the virtual environment and run Deep-Live-Cam with the explicit `python3.11` command:
+
+    ```bash
+    python3.11 -m venv venv
+    source venv/bin/activate
+    python3.11 run.py --execution-provider coreml
+    ```
+  </Accordion>
+
+  <Accordion title="NSFW filter blocking content">
+    Deep-Live-Cam includes a built-in content filter powered by [opennsfw2](https://github.com/bhky/opennsfw2) that automatically blocks processing of nudity, graphic violence, and other sensitive material. This is intentional and cannot be disabled without modifying the source code.
+
+    <Warning>
+      Attempting to bypass the NSFW filter violates the project's ethical use policy. Users are responsible for ensuring their use of the software aligns with ethical standards and legal requirements. See the [ethics and legal guidelines](/ethics-and-legal) page for details.
+    </Warning>
+
+    If legitimate content is being incorrectly flagged, check that your source or target image does not contain partial nudity, graphic imagery, or other material the model classifies as sensitive. Use a different source image or target file.
+  </Accordion>
+</AccordionGroup>
